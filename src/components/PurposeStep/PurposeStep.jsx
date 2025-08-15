@@ -1,7 +1,7 @@
 import React from 'react';
-import { Target, Brain, Palette, Send, Lightbulb, Loader2 } from 'lucide-react';
+import { Target, Brain, Palette, Send, Loader2, Lightbulb } from 'lucide-react';
 
-const PurposeStep = ({ purpose, setPurpose, onSubmit, onInquiryMode, isGeneratingComplexes }) => {
+const PurposeStep = ({ purpose, setPurpose, onSubmit, isGeneratingComplexes }) => {
   const handleSubmit = () => {
     if (!purpose.trim()) return;
     onSubmit(purpose);
@@ -28,7 +28,7 @@ const PurposeStep = ({ purpose, setPurpose, onSubmit, onInquiryMode, isGeneratin
           </div>
           
           <p className="text-slate-600 mb-6">
-            Before we begin, help us understand what you're trying to achieve. This will guide our AI critics in providing relevant feedback.
+            What are you trying to achieve with your writing? This will guide our AI critics in providing relevant feedback.
           </p>
 
           <textarea
@@ -50,10 +50,14 @@ const PurposeStep = ({ purpose, setPurpose, onSubmit, onInquiryMode, isGeneratin
                 <Palette className="w-4 h-4 text-blue-600" />
                 <span><strong>Style Guide:</strong> Suggests improvements to writing style and flow</span>
               </div>
+              <div className="flex items-center gap-2">
+                <Target className="w-4 h-4 text-green-600" />
+                <span><strong>Inquiry Complex Integration:</strong> Connects your writing to deeper questions</span>
+              </div>
             </div>
           </div>
 
-          <div className="mt-6 space-y-3">
+          <div className="mt-6">
             <button
               onClick={handleSubmit}
               disabled={!purpose.trim() || isGeneratingComplexes}
@@ -71,25 +75,12 @@ const PurposeStep = ({ purpose, setPurpose, onSubmit, onInquiryMode, isGeneratin
                 </>
               )}
             </button>
-            
-            <div className="text-center">
-              <span className="text-sm text-slate-500">or</span>
-            </div>
-            
-            <button
-              onClick={onInquiryMode}
-              disabled={isGeneratingComplexes}
-              className="w-full bg-purple-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-purple-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-            >
-              <Lightbulb className="w-4 h-4" />
-              Explore with Inquiry Complex
-            </button>
           </div>
           
           <p className="text-sm text-slate-500 mt-2 text-center">
             {isGeneratingComplexes 
               ? 'AI is analyzing your purpose to create initial inquiry complexes...'
-              : 'Press Ctrl+Enter to submit | Inquiry Complex: Deep intellectual exploration'
+              : 'Press Ctrl+Enter to submit'
             }
           </p>
           

@@ -4,21 +4,21 @@
  */
 
 /**
- * Generate the central point for a new inquiry complex
+ * Generate multiple central points for a new inquiry complex to provide balanced perspectives
  */
 export const generateCentralPointPrompt = (question) => `
-You are a philosopher and critical thinker tasked with formulating a central intellectual position.
+You are a philosopher and critical thinker. Generate 3 distinct intellectual positions for this question to provide balanced perspectives.
 
 INQUIRY QUESTION: "${question}"
 
-Generate a thoughtful, substantive central point that:
-1. Takes a clear position on the question
-2. Provides initial reasoning or evidence
-3. Is intellectually honest and nuanced
-4. Invites serious intellectual engagement
-5. Is substantial enough to support recursive exploration
+Generate 3 different thoughtful, substantive positions that:
+1. Take clear but different stances on the question
+2. Provide initial reasoning or evidence
+3. Are intellectually honest and nuanced
+4. Invite serious intellectual engagement
+5. Represent different philosophical approaches or viewpoints
 
-The central point should be:
+Each position should be:
 - 2-4 sentences long
 - Intellectually rigorous
 - Neither obviously true nor obviously false
@@ -27,11 +27,32 @@ The central point should be:
 Respond with ONLY valid JSON:
 
 {
-  "content": "The substantive intellectual position addressing the question",
-  "strength": 0.75,
-  "tags": ["relevant", "philosophical", "tags"],
-  "keyTerms": ["important", "concepts", "mentioned"],
-  "reasoning": "Brief explanation of the logical foundation"
+  "positions": [
+    {
+      "content": "First substantive intellectual position addressing the question",
+      "strength": 0.75,
+      "tags": ["relevant", "philosophical", "tags"],
+      "keyTerms": ["important", "concepts"],
+      "reasoning": "Brief explanation of this position's logical foundation",
+      "perspective": "Brief label for this viewpoint (e.g., 'Pragmatic', 'Idealistic', 'Skeptical')"
+    },
+    {
+      "content": "Second distinct position with different approach",
+      "strength": 0.80,
+      "tags": ["different", "philosophical", "tags"],
+      "keyTerms": ["other", "key", "concepts"],
+      "reasoning": "Brief explanation of this position's logical foundation",
+      "perspective": "Brief label for this viewpoint"
+    },
+    {
+      "content": "Third perspective offering another angle",
+      "strength": 0.70,
+      "tags": ["alternative", "philosophical", "tags"], 
+      "keyTerms": ["additional", "important", "terms"],
+      "reasoning": "Brief explanation of this position's logical foundation",
+      "perspective": "Brief label for this viewpoint"
+    }
+  ]
 }
 `;
 
@@ -269,6 +290,56 @@ export const createComplexSummary = (complex) => {
   return summary;
 };
 
+/**
+ * Extract key themes from written text for complex creation
+ */
+export const extractThemesPrompt = (content, purpose, maxThemes = 5, existingThemes = []) => {
+  const existingThemesText = existingThemes.length > 0 
+    ? `\n\nEXISTING THEMES (DO NOT repeat or duplicate):\n${existingThemes.map(t => `- ${t.title}: ${t.description}`).join('\n')}\n`
+    : '';
+
+  return `Extract up to ${maxThemes} NEW intellectual themes from this text that are NOT already covered.
+
+PURPOSE: ${purpose}
+
+TEXT:
+${content}${existingThemesText}
+
+IMPORTANT: Only return themes that are genuinely NEW and substantially different from existing ones. If no significant new themes exist, return fewer themes or empty array.
+
+Find themes that involve tension, contradiction, or philosophical depth.
+
+Return ONLY this JSON format with NO additional text:
+
+{"themes":[{"title":"Theme Name","description":"Brief explanation","question":"Inquiry question?","significance":0.8}]}
+
+Requirements:
+- Each theme needs title, description, question, significance
+- Questions should invite deep exploration
+- Focus on intellectually substantial themes
+- Keep descriptions under 50 words
+- Significance between 0.1 and 1.0
+- DO NOT duplicate existing themes
+
+JSON only:`;
+};
+
+/**
+ * Simplified version for fallback with even shorter responses
+ */
+export const extractThemesPromptSimple = (content, purpose, maxThemes = 3, existingThemes = []) => {
+  const existingList = existingThemes.length > 0 
+    ? `\n\nExisting: ${existingThemes.map(t => t.title).join(', ')}\nFind NEW themes only.`
+    : '';
+
+  return `Find up to ${maxThemes} NEW philosophical themes in this text.${existingList}
+
+TEXT: ${content}
+
+JSON format only:
+{"themes":[{"title":"Theme","description":"Why significant","question":"Question?","significance":0.8}]}`;
+};
+
 export default {
   generateCentralPointPrompt,
   generateObjectionsPrompt,
@@ -276,6 +347,8 @@ export default {
   generateSynthesisPrompt,
   generateFollowUpQuestionsPrompt,
   analyzeComplexPrompt,
+  extractThemesPrompt,
+  extractThemesPromptSimple,
   createComplexPathDescription,
   createComplexSummary
 };

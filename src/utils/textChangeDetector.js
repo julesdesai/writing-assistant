@@ -104,15 +104,46 @@ export class TextChangeDetector {
     
     return suggestions.map(suggestion => {
       const updatedSuggestion = { ...suggestion };
+      let isRetracted = false;
       
       for (const change of changes) {
-        const result = this.adjustSuggestionForChange(updatedSuggestion, change);
-        if (result.status === 'retracted') {
-          updatedSuggestion.status = 'retracted';
-          updatedSuggestion.retractedReason = result.reason;
-          break;
-        } else if (result.newPosition) {
-          updatedSuggestion.position = result.newPosition;
+        if (isRetracted) break;
+        
+        // Handle both old position format and new positions array format
+        if (suggestion.positions && Array.isArray(suggestion.positions)) {
+          // New format with positions array
+          const updatedPositions = [];
+          let retractedCount = 0;
+          
+          for (const position of suggestion.positions) {
+            const tempSuggestion = { position };
+            const result = this.adjustSuggestionForChange(tempSuggestion, change);
+            
+            if (result.status === 'retracted') {
+              retractedCount++;
+            } else {
+              updatedPositions.push(result.newPosition || position);
+            }
+          }
+          
+          // If more than half of positions are retracted, retract the whole suggestion
+          if (retractedCount > suggestion.positions.length / 2) {
+            updatedSuggestion.status = 'retracted';
+            updatedSuggestion.retractedReason = `Text was significantly modified in ${retractedCount} location(s)`;
+            isRetracted = true;
+          } else if (updatedPositions.length > 0) {
+            updatedSuggestion.positions = updatedPositions;
+          }
+        } else {
+          // Old format with single position
+          const result = this.adjustSuggestionForChange(updatedSuggestion, change);
+          if (result.status === 'retracted') {
+            updatedSuggestion.status = 'retracted';
+            updatedSuggestion.retractedReason = result.reason;
+            isRetracted = true;
+          } else if (result.newPosition) {
+            updatedSuggestion.position = result.newPosition;
+          }
         }
       }
       
@@ -124,7 +155,12 @@ export class TextChangeDetector {
    * Adjust a single suggestion based on a change
    */
   adjustSuggestionForChange(suggestion, change) {
-    const { position } = suggestion;
+    // Handle both old position format and new positions format
+    const position = suggestion.position || (suggestion.positions && suggestion.positions[0]);
+    if (!position || typeof position.start === 'undefined' || typeof position.end === 'undefined') {
+      return {}; // Skip suggestions without valid position data
+    }
+    
     const { start: changeStart, end: changeEnd, oldEnd: changeOldEnd, lengthDelta, type } = change;
     
     // Check if the suggestion is affected by the change
@@ -196,17 +232,26 @@ export class TextChangeDetector {
   prepareSuggestionEvaluation(suggestion, originalText, currentText, changes) {
     // Filter changes that might affect this suggestion
     const relevantChanges = changes.filter(change => {
-      const suggestionStart = suggestion.position.start;
-      const suggestionEnd = suggestion.position.end;
+      // Handle both position formats
+      const positions = suggestion.positions || (suggestion.position ? [suggestion.position] : []);
       
-      // Include changes that:
-      // 1. Overlap with the suggestion
-      // 2. Are within 100 characters of the suggestion (context changes)
-      const hasOverlap = !(change.end <= suggestionStart || change.start >= suggestionEnd);
-      const isNearby = Math.abs(change.start - suggestionStart) <= 100 || 
-                      Math.abs(change.end - suggestionEnd) <= 100;
-      
-      return hasOverlap || isNearby;
+      return positions.some(position => {
+        if (!position || typeof position.start === 'undefined' || typeof position.end === 'undefined') {
+          return false;
+        }
+        
+        const suggestionStart = position.start;
+        const suggestionEnd = position.end;
+        
+        // Include changes that:
+        // 1. Overlap with the suggestion
+        // 2. Are within 100 characters of the suggestion (context changes)
+        const hasOverlap = !(change.end <= suggestionStart || change.start >= suggestionEnd);
+        const isNearby = Math.abs(change.start - suggestionStart) <= 100 || 
+                        Math.abs(change.end - suggestionEnd) <= 100;
+        
+        return hasOverlap || isNearby;
+      });
     });
 
     return {
@@ -227,24 +272,33 @@ export class TextChangeDetector {
   needsAIEvaluation(suggestion, changes) {
     if (!changes.length) return false;
     
-    const suggestionStart = suggestion.position.start;
-    const suggestionEnd = suggestion.position.end;
+    // Handle both position formats
+    const positions = suggestion.positions || (suggestion.position ? [suggestion.position] : []);
     
-    // Check if any changes significantly affect the suggestion area
-    return changes.some(change => {
-      // Direct overlap
-      if (!(change.end <= suggestionStart || change.start >= suggestionEnd)) {
-        return true;
+    return positions.some(position => {
+      if (!position || typeof position.start === 'undefined' || typeof position.end === 'undefined') {
+        return false;
       }
       
-      // Nearby changes that might affect context
-      const distance = Math.min(
-        Math.abs(change.start - suggestionStart),
-        Math.abs(change.end - suggestionEnd)
-      );
+      const suggestionStart = position.start;
+      const suggestionEnd = position.end;
       
-      // Major changes within 50 characters warrant re-evaluation
-      return distance <= 50 && change.lengthDelta !== 0;
+      // Check if any changes significantly affect the suggestion area
+      return changes.some(change => {
+        // Direct overlap
+        if (!(change.end <= suggestionStart || change.start >= suggestionEnd)) {
+          return true;
+        }
+        
+        // Nearby changes that might affect context
+        const distance = Math.min(
+          Math.abs(change.start - suggestionStart),
+          Math.abs(change.end - suggestionEnd)
+        );
+        
+        // Major changes within 50 characters warrant re-evaluation
+        return distance <= 50 && change.lengthDelta !== 0;
+      });
     });
   }
 }

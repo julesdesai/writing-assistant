@@ -1,12 +1,14 @@
 import React from 'react';
-import { Play, Pause, ArrowLeft } from 'lucide-react';
+import { Play, Pause, ArrowLeft, FileText } from 'lucide-react';
 
 const Header = ({ 
   purpose, 
   isMonitoring, 
   onToggleMonitoring, 
   onClearFeedback, 
-  onBackToPurpose 
+  onBackToPurpose,
+  onDocumentAnalysis,
+  isDocumentAnalyzing
 }) => {
   return (
     <div className="bg-white border-b border-slate-200 p-4">
@@ -27,6 +29,18 @@ const Header = ({
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={onDocumentAnalysis}
+            disabled={isDocumentAnalyzing}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              isDocumentAnalyzing
+                ? 'bg-blue-50 text-blue-400 cursor-not-allowed'
+                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+            }`}
+          >
+            <FileText className={`w-4 h-4 ${isDocumentAnalyzing ? 'animate-pulse' : ''}`} />
+            {isDocumentAnalyzing ? 'Analyzing Document...' : 'Full Document Analysis'}
+          </button>
           <button
             onClick={onToggleMonitoring}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${

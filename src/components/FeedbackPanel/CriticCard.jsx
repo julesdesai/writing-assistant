@@ -1,7 +1,7 @@
-import React from 'react';
-import { Brain, Palette, AlertCircle, X, Check, Clock, Target, Lightbulb, ArrowRight, BookOpen } from 'lucide-react';
+import React, { useState } from 'react';
+import { Brain, Palette, AlertCircle, X, Check, Clock, Target, Lightbulb, ArrowRight, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 
-const CriticCard = ({ feedback, onDismiss, onMarkResolved, onCreateComplex, onApplyInsight, onExploreFramework }) => {
+const CriticCard = ({ feedback, onDismiss, onMarkResolved, onCreateComplex, onApplyInsight, onExploreFramework, onJumpToText }) => {
   // Handle cases where feedback might be malformed
   const feedbackData = typeof feedback === 'string' ? { 
     type: 'unknown', 
@@ -92,7 +92,7 @@ const CriticCard = ({ feedback, onDismiss, onMarkResolved, onCreateComplex, onAp
         onApplyInsight?.(actionData.suggestion, actionData.complexId, actionData.nodeId);
         break;
       case 'explore_framework':
-        onExploreFramework?.(actionData.framework, actionData.keyThinkers, actionData.suggestedReading);
+        onExploreFramework?.(actionData.framework, actionData.keyAuthorities, actionData.suggestedResources);
         break;
       default:
         console.warn('Unknown action type:', actionData.type);
@@ -167,7 +167,12 @@ const CriticCard = ({ feedback, onDismiss, onMarkResolved, onCreateComplex, onAp
             </>
           )}
           <span className="text-xs text-slate-500 ml-2">
-            {feedbackData.timestamp?.toLocaleTimeString() || 'Now'}
+            {feedbackData.timestamp 
+              ? (feedbackData.timestamp instanceof Date 
+                  ? feedbackData.timestamp.toLocaleTimeString() 
+                  : new Date(feedbackData.timestamp).toLocaleTimeString())
+              : 'Now'
+            }
           </span>
         </div>
       </div>
@@ -189,6 +194,22 @@ const CriticCard = ({ feedback, onDismiss, onMarkResolved, onCreateComplex, onAp
       }`}>
         {feedbackData.feedback || feedbackData.message}
       </p>
+
+      {/* Show the problematic text snippet */}
+      {feedbackData.positions && feedbackData.positions.length > 0 && feedbackData.positions[0].text && (
+        <div 
+          className="mt-2 p-2 bg-gray-50 rounded border-l-2 border-gray-300 cursor-pointer hover:bg-gray-100 transition-colors"
+          onClick={() => onJumpToText && onJumpToText(feedbackData.id)}
+          title="Click to jump to this text in the document"
+        >
+          <div className="text-xs text-gray-600 font-medium mb-1">Referenced text (click to jump):</div>
+          <div className="text-sm text-gray-800 italic">
+            "{feedbackData.positions[0].text.length > 100 
+              ? feedbackData.positions[0].text.substring(0, 100) + '...' 
+              : feedbackData.positions[0].text}"
+          </div>
+        </div>
+      )}
       
       {feedbackData.suggestion && (
         <div className={`mt-2 p-2 bg-white rounded border-l-2 ${
@@ -204,6 +225,7 @@ const CriticCard = ({ feedback, onDismiss, onMarkResolved, onCreateComplex, onAp
         </div>
       )}
 
+
       {/* Special inquiry integration content */}
       {feedbackData.actionData && (
         <div className="mt-2 p-2 bg-gray-50 rounded text-xs">
@@ -218,9 +240,9 @@ const CriticCard = ({ feedback, onDismiss, onMarkResolved, onCreateComplex, onAp
             </div>
           )}
           
-          {feedbackData.actionData.type === 'explore_framework' && feedbackData.actionData.keyThinkers && (
+          {feedbackData.actionData.type === 'explore_framework' && feedbackData.actionData.keyAuthorities && (
             <div>
-              <strong>Key Thinkers:</strong> {feedbackData.actionData.keyThinkers.join(', ')}
+              <strong>Key Authorities:</strong> {feedbackData.actionData.keyAuthorities.join(', ')}
             </div>
           )}
         </div>

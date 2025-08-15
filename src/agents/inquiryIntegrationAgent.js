@@ -80,7 +80,7 @@ export const analyzeText = async (content, purpose, existingComplexes = []) => {
       });
     }
 
-    // Philosophical framework connections
+    // Framework connections
     if (analysis.frameworkConnections && analysis.frameworkConnections.length > 0) {
       analysis.frameworkConnections.forEach(connection => {
         insights.push({
@@ -91,8 +91,8 @@ export const analyzeText = async (content, purpose, existingComplexes = []) => {
           action: {
             type: 'explore_framework',
             framework: connection.framework,
-            keyThinkers: connection.keyThinkers || [],
-            suggestedReading: connection.suggestedReading || []
+            keyAuthorities: connection.keyAuthorities || [],
+            suggestedResources: connection.suggestedResources || []
           },
           confidence: connection.confidence || 0.5
         });
@@ -117,7 +117,7 @@ const createAnalysisPrompt = (content, purpose, existingComplexes) => {
     keyInsights: extractKeyInsights(complex)
   }));
 
-  return `You are an intellectual integration agent that connects writing with deeper philosophical exploration.
+  return `You are an intellectual integration agent that identifies complex ideas and tensions worthy of dialectical exploration.
 
 WRITING PURPOSE: ${purpose}
 
@@ -130,13 +130,13 @@ ${complexSummaries.length > 0 ?
   'None created yet'
 }
 
-Analyze the writing for opportunities to deepen intellectual engagement:
+Analyze the writing for opportunities to deepen intellectual rigor:
 
-1. **Complex Creation Opportunities**: Does the writing touch on questions that warrant deep exploration through an Inquiry Complex?
+1. **Complex Creation Opportunities**: Does the writing present claims, assumptions, or tensions that could benefit from dialectical examination (thesis-antithesis-synthesis)?
 
 2. **Existing Complex Insights**: Can insights from existing complexes enhance this writing?
 
-3. **Philosophical Framework Connections**: What broader intellectual frameworks relate to this writing?
+3. **Framework Connections**: What broader intellectual frameworks, methodologies, or domain-specific approaches relate to this writing?
 
 Respond with ONLY valid JSON:
 
@@ -144,32 +144,39 @@ Respond with ONLY valid JSON:
   "shouldCreateComplex": true/false,
   "complexSuggestion": {
     "question": "Deep question that emerges from the writing",
-    "reasoning": "Why this question deserves complex exploration",
+    "reasoning": "Why this question deserves complex exploration", 
     "relevantText": "Specific text passage that prompted this",
     "confidence": 0.75
   },
   "complexInsights": [
     {
       "complexId": "relevant_complex_id_if_applicable",
-      "nodeId": "specific_node_if_applicable", 
+      "nodeId": "specific_node_if_applicable",
       "insight": "How this complex insight applies to the writing",
-      "applicationSuggestion": "Specific way to incorporate this insight",
+      "applicationSuggestion": "Specific way to incorporate this insight", 
       "priority": "high|medium|low",
       "confidence": 0.70
     }
   ],
   "frameworkConnections": [
     {
-      "framework": "Name of philosophical/intellectual framework",
+      "framework": "Name of intellectual framework, methodology, or domain approach",
       "explanation": "How this framework relates to the writing",
-      "keyThinkers": ["Relevant thinkers"],
-      "suggestedReading": ["Suggested resources"],
+      "keyAuthorities": ["Relevant experts or authorities in this domain"],
+      "suggestedResources": ["Suggested resources specific to this domain"],
       "confidence": 0.60
     }
   ]
 }
 
-Focus on genuine intellectual opportunities. Only suggest complex creation for questions that truly benefit from dialectical exploration.`;
+Requirements:
+- Provide 2-4 complexInsights when existing complexes are relevant 
+- Provide 1-3 frameworkConnections when intellectual frameworks apply (could be scientific methods, business frameworks, literary theories, historical approaches, etc.)
+- Only suggest complex creation for claims/assumptions that have meaningful opposing viewpoints and benefit from dialectical exploration
+- Each insight should be distinct and actionable
+- Order insights by priority (high to medium to low)
+- Focus on connections that will genuinely enhance the intellectual rigor of the writing
+- Consider domain-specific frameworks: scientific method for technical writing, business strategy for corporate writing, literary theory for creative writing, etc.`;
 };
 
 /**
@@ -309,29 +316,30 @@ export const extractInitialComplexes = async (purpose) => {
  * Create analysis prompt for extracting complexes from writing purpose
  */
 const createPurposeAnalysisPrompt = (purpose) => {
-  return `You are an intellectual analysis agent that identifies deep questions worthy of dialectical exploration.
+  return `You are an intellectual analysis agent that identifies complex claims, assumptions, and tensions worthy of dialectical exploration.
 
 WRITING PURPOSE:
 ${purpose}
 
-Analyze this writing purpose and identify 2-3 inquiry complexes that would strengthen the intellectual foundation of this work.
+Analyze this writing purpose and identify 2-3 inquiry complexes that would strengthen the intellectual rigor of this work through thesis-antithesis-synthesis exploration.
 
 An inquiry complex should:
-1. Address fundamental assumptions or tensions in the purpose
-2. Be specific enough to generate meaningful objections and counter-arguments
-3. Be broad enough to support recursive exploration
-4. Connect to broader intellectual or philosophical frameworks
-5. Help the writer think more deeply about their topic
+1. Address key claims, assumptions, or tensions in the purpose that have meaningful opposing viewpoints
+2. Be specific enough to generate substantive counter-arguments and alternative perspectives
+3. Be broad enough to support recursive exploration and synthesis
+4. Connect to relevant domain frameworks, methodologies, or expert knowledge
+5. Help the writer anticipate objections and strengthen their arguments
 
-Examples of GOOD complex questions:
-- "Is technological progress inherently beneficial to human flourishing?"
-- "Can objective moral standards exist in a pluralistic society?"
-- "What constitutes legitimate authority in democratic governance?"
+Examples of GOOD complex questions across domains:
+- Business: "Does rapid scaling necessarily compromise product quality and customer satisfaction?"
+- Science: "Can peer review maintain objectivity while accommodating paradigm shifts?"
+- Education: "Is standardized assessment compatible with personalized learning approaches?"
+- Technology: "Does algorithm transparency inherently conflict with competitive advantage?"
 
 Examples of POOR complex questions:
-- "What is renewable energy?" (too factual)
-- "Should we do something about climate change?" (too broad)
-- "How do solar panels work?" (not dialectical)
+- "What is renewable energy?" (purely factual, no opposing viewpoints)
+- "Should we do something about climate change?" (too broad, lacks specificity)
+- "How do neural networks process data?" (technical explanation, not dialectical)
 
 Respond with ONLY valid JSON:
 
@@ -346,13 +354,13 @@ Respond with ONLY valid JSON:
     }
   ],
   "overallAssessment": {
-    "intellectualDepth": "Assessment of how much deep thinking this purpose requires",
-    "dialecticalOpportunities": "Key areas where opposing viewpoints would strengthen the work",
-    "recommendedApproach": "Suggested strategy for using these complexes"
+    "intellectualDepth": "Assessment of how much dialectical thinking this purpose requires",
+    "dialecticalOpportunities": "Key claims/assumptions where opposing viewpoints would strengthen the work",
+    "recommendedApproach": "Suggested strategy for using these complexes to strengthen arguments"
   }
 }
 
-Focus on questions that will genuinely help the writer think more rigorously and address potential objections to their work.`;
+Focus on questions that will genuinely help the writer think more rigorously, anticipate counterarguments, and address potential objections to their work. Consider the specific domain and adjust complexity accordingly - business writing needs different dialectical exploration than scientific writing or creative writing.`;
 };
 
 /**

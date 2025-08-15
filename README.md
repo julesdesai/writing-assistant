@@ -21,9 +21,10 @@ An advanced writing assistant that combines real-time AI criticism with deep int
 - Integration between writing assistance and deep thinking
 
 ### Modular AI Service
-- Support for both OpenAI and Claude APIs
+- Support for OpenAI, Claude, and local inference APIs
+- Local gpt-oss-20b model support via Ollama for privacy and offline use
 - Structured prompt engineering for consistent AI responses
-- Error handling and fallback mechanisms
+- Error handling and automatic fallback mechanisms
 
 ## Installation
 
@@ -38,19 +39,39 @@ cd writing-assistant
 npm install
 ```
 
-3. Set up environment variables:
+3. Install backend dependencies (for local inference):
+```bash
+cd backend
+npm install
+cd ..
+```
+
+4. Set up environment variables:
 Create a `.env` file in the root directory:
 ```
 REACT_APP_OPENAI_API_KEY=your_openai_api_key
 REACT_APP_CLAUDE_API_KEY=your_claude_api_key
+
+# Local inference (optional)
+REACT_APP_USE_LOCAL_INFERENCE=false
+REACT_APP_LOCAL_BACKEND_URL=http://localhost:3001
 ```
 
-4. Start the development server:
+5. For local inference setup (optional):
+   - Install [Ollama](https://ollama.com/download)
+   - Pull the model: `ollama pull gpt-oss:20b`
+   - Start Ollama: `ollama serve`
+
+6. Start the development server:
 ```bash
+# Start both frontend and backend (if using local inference)
+npm run dev
+
+# Or start frontend only
 npm start
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) to view the app.
+7. Open [http://localhost:3000](http://localhost:3000) to view the app.
 
 ## How to Use the Writing Assistant Effectively
 
@@ -184,15 +205,37 @@ The writing assistant is designed to evolve with your thinking process, providin
 
 ### Available Scripts
 
-- `npm start`: Runs development server
+- `npm start`: Runs frontend development server
+- `npm run backend`: Runs backend server for local inference
+- `npm run dev`: Runs both frontend and backend concurrently
 - `npm run build`: Creates production build
 - `npm test`: Runs test suite
 - `npm run eject`: Ejects from Create React App (one-way operation)
 
 ### Environment Variables
 
+**Frontend (.env)**:
 - `REACT_APP_OPENAI_API_KEY`: OpenAI API key for GPT models
 - `REACT_APP_CLAUDE_API_KEY`: Anthropic API key for Claude models
+- `REACT_APP_USE_LOCAL_INFERENCE`: Enable local inference (true/false)
+- `REACT_APP_LOCAL_BACKEND_URL`: Backend URL for local inference
+
+**Backend (backend/.env)**:
+- `PORT`: Backend server port (default: 3001)
+- `OLLAMA_BASE_URL`: Ollama API URL (default: http://localhost:11434)
+- `OLLAMA_MODEL`: Model name (default: gpt-oss:20b)
+
+### Local Inference Setup
+
+**Requirements**:
+- 16GB RAM minimum (more recommended)
+- ~12GB storage for gpt-oss-20b model
+- Ollama installed and running
+
+**Troubleshooting**:
+- If "Local backend unavailable": Check backend server and Ollama are running
+- If "Model not found": Run `ollama pull gpt-oss:20b`
+- For performance issues: Ensure sufficient RAM and close other applications
 
 ### Contributing
 
