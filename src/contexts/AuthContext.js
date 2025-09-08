@@ -69,6 +69,24 @@ export function AuthProvider({ children }) {
     await setDoc(doc(db, 'users', currentUser.uid), data, { merge: true });
   }
 
+  // Save custom prompts to user profile
+  async function saveCustomPrompts(customPrompts) {
+    if (!currentUser) return;
+    
+    await setDoc(doc(db, 'users', currentUser.uid), {
+      customPrompts
+    }, { merge: true });
+  }
+
+  // Get custom prompts from user profile
+  async function getCustomPrompts() {
+    if (!currentUser) return null;
+    
+    const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+    const userData = userDoc.exists() ? userDoc.data() : null;
+    return userData?.customPrompts || null;
+  }
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
@@ -85,6 +103,8 @@ export function AuthProvider({ children }) {
     logout,
     getUserData,
     updateUserData,
+    saveCustomPrompts,
+    getCustomPrompts,
     loading
   };
 

@@ -3,7 +3,10 @@ import Header from '../Header';
 import WritingArea from '../WritingArea';
 import FeedbackPanel from '../FeedbackPanel';
 import DialecticalSidebar from '../DialecticalSidebar';
+import PromptCustomizationPanel from '../PromptCustomization/PromptCustomizationPanel';
+import APITestPanel from '../Debug/APITestPanel';
 import { useWritingAnalysis } from '../../hooks/useWritingAnalysis';
+import { useMultiAgentAnalysis } from '../../hooks/useMultiAgentAnalysis';
 import { createComplexFromWriting, applyComplexInsight } from '../../agents/inquiryIntegrationAgent';
 import inquiryComplexService from '../../services/inquiryComplexService';
 
@@ -14,28 +17,64 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
   const [dialecticalSidebarOpen, setDialecticalSidebarOpen] = useState(false);
   const [dialecticalOpportunities, setDialecticalOpportunities] = useState([]);
   const [activeComplexes, setActiveComplexes] = useState([]);
+  const [useMultiAgentSystem, setUseMultiAgentSystem] = useState(true); // Feature flag
+  const [multiAgentFeedback, setMultiAgentFeedback] = useState([]);
+  const [showPromptCustomization, setShowPromptCustomization] = useState(false);
+  const [showAPITest, setShowAPITest] = useState(false);
   
-  const { 
-    feedback: hookFeedback, 
-    clearFeedback, 
-    dismissSuggestion, 
-    markSuggestionResolved, 
-    isEvaluating, 
-    isAnalyzing,
-    runDocumentAnalysis,
-    isDocumentAnalyzing
-  } = useWritingAnalysis(content, purpose, isMonitoring, writingCriteria);
+  // Legacy writing analysis hook
+  const legacyAnalysis = useWritingAnalysis(content, purpose, isMonitoring && !useMultiAgentSystem, writingCriteria);
+  
+  // New multi-agent analysis hook
+  const multiAgentAnalysis = useMultiAgentAnalysis();
+  
+  // Multi-agent feedback management functions
+  const handleMultiAgentDismiss = (feedbackId) => {
+    setMultiAgentFeedback(prev => 
+      prev.map(item => 
+        item.id === feedbackId 
+          ? { ...item, status: 'dismissed' }
+          : item
+      )
+    );
+  };
+
+  const handleMultiAgentResolve = (feedbackId) => {
+    setMultiAgentFeedback(prev => 
+      prev.map(item => 
+        item.id === feedbackId 
+          ? { ...item, status: 'resolved' }
+          : item
+      )
+    );
+  };
+
+  const handleMultiAgentClear = () => {
+    setMultiAgentFeedback([]);
+  };
+
+  // Choose which system to use based on feature flag
+  const currentAnalysis = useMultiAgentSystem ? {
+    feedback: multiAgentFeedback,
+    clearFeedback: handleMultiAgentClear,
+    dismissSuggestion: handleMultiAgentDismiss,
+    markSuggestionResolved: handleMultiAgentResolve,
+    isEvaluating: multiAgentAnalysis.isEnhancing,
+    isAnalyzing: multiAgentAnalysis.loading,
+    runDocumentAnalysis: () => multiAgentAnalysis.analyze(content, { purpose }),
+    isDocumentAnalyzing: multiAgentAnalysis.loading
+  } : legacyAnalysis;
   
   // Sync hook feedback with passed feedback when hook updates
   useEffect(() => {
-    if (setFeedback && hookFeedback && hookFeedback.length > 0) {
-      setFeedback(hookFeedback);
+    if (setFeedback && currentAnalysis.feedback && currentAnalysis.feedback.length > 0) {
+      setFeedback(currentAnalysis.feedback);
     }
-  }, [hookFeedback?.length]); // Only trigger when feedback count changes, not the array reference
+  }, [currentAnalysis.feedback?.length]); // Only trigger when feedback count changes, not the array reference
   
-  // Always use hook feedback for display since it handles filtering correctly
+  // Always use current analysis feedback for display since it handles filtering correctly
   // Only use passed feedback for initial state synchronization
-  const activeFeedback = hookFeedback || [];
+  const activeFeedback = currentAnalysis.feedback || [];
   const activeFeedbackSetter = setFeedback || (() => {});
 
   // Load initial complexes when component mounts
@@ -59,15 +98,49 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
 
   // Extract dialectical opportunities from feedback
   useEffect(() => {
-    if (hookFeedback) {
-      const opportunities = hookFeedback.filter(item => 
+    if (currentAnalysis.feedback) {
+      const opportunities = currentAnalysis.feedback.filter(item => 
         item.type === 'dialectical_opportunity' || 
         item.type === 'complex_suggestion' ||
         (item.type === 'intellectual' && item.actionData?.type === 'dialectical_guide')
       );
       setDialecticalOpportunities(opportunities);
     }
-  }, [hookFeedback]);
+  }, [currentAnalysis.feedback?.length]);
+
+  // Sync multi-agent results to local feedback state
+  useEffect(() => {
+    if (useMultiAgentSystem && multiAgentAnalysis.results?.insights) {
+      const newInsights = multiAgentAnalysis.results.insights.map(insight => ({
+        ...insight,
+        id: insight.id || `insight-${Date.now()}-${Math.random()}`,
+        timestamp: new Date(),
+        status: 'active'
+      }));
+      
+      setMultiAgentFeedback(prev => {
+        // Only add new insights that aren't already in the list
+        const existingIds = new Set(prev.map(item => item.id));
+        const uniqueNewInsights = newInsights.filter(insight => !existingIds.has(insight.id));
+        
+        if (uniqueNewInsights.length > 0) {
+          return [...prev, ...uniqueNewInsights];
+        }
+        return prev;
+      });
+    }
+  }, [useMultiAgentSystem, multiAgentAnalysis.results?.insights]);
+
+  // Auto-analyze content with multi-agent system when monitoring is enabled
+  useEffect(() => {
+    if (useMultiAgentSystem && isMonitoring && content && content.length > 50) {
+      const timeoutId = setTimeout(() => {
+        multiAgentAnalysis.analyze(content, { purpose, writingCriteria });
+      }, 1500); // Debounce analysis
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [content, isMonitoring, useMultiAgentSystem, purpose]);
 
   const handleToggleMonitoring = () => {
     setIsMonitoring(!isMonitoring);
@@ -213,11 +286,49 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
         purpose={purpose}
         isMonitoring={isMonitoring}
         onToggleMonitoring={handleToggleMonitoring}
-        onClearFeedback={clearFeedback}
+        onClearFeedback={currentAnalysis.clearFeedback}
         onBackToPurpose={onBackToPurpose}
-        onDocumentAnalysis={runDocumentAnalysis}
-        isDocumentAnalyzing={isDocumentAnalyzing}
+        onDocumentAnalysis={currentAnalysis.runDocumentAnalysis}
+        isDocumentAnalyzing={currentAnalysis.isDocumentAnalyzing}
       />
+      
+      {/* Multi-Agent System Toggle & Prompt Customization */}
+      <div className="max-w-7xl mx-auto px-6 py-2">
+        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-blue-900">🤖 Multi-Agent System</span>
+              <span className="text-xs text-blue-700">
+                {useMultiAgentSystem ? 'Enhanced AI Critics (6 specialized agents)' : 'Legacy System'}
+              </span>
+            </div>
+            <button
+              onClick={() => setShowPromptCustomization(true)}
+              className="text-xs text-blue-600 hover:text-blue-800 underline"
+            >
+              Customize Prompts
+            </button>
+            <button
+              onClick={() => setShowAPITest(true)}
+              className="text-xs text-orange-600 hover:text-orange-800 underline"
+            >
+              Test API
+            </button>
+          </div>
+          <button
+            onClick={() => setUseMultiAgentSystem(!useMultiAgentSystem)}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+              useMultiAgentSystem ? 'bg-blue-600' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                useMultiAgentSystem ? 'translate-x-5' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
       
       <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Show initial complexes notification */}
@@ -271,10 +382,10 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
             onFeedbackHover={handleFeedbackHover}
             onFeedbackLeave={handleFeedbackLeave}
             hoveredFeedback={hoveredFeedback}
-            onDismissSuggestion={dismissSuggestion}
-            onMarkSuggestionResolved={markSuggestionResolved}
-            isEvaluating={isEvaluating}
-            isAnalyzing={isAnalyzing}
+            onDismissSuggestion={currentAnalysis.dismissSuggestion}
+            onMarkSuggestionResolved={currentAnalysis.markSuggestionResolved}
+            isEvaluating={currentAnalysis.isEvaluating}
+            isAnalyzing={currentAnalysis.isAnalyzing}
             onCreateComplex={handleCreateComplex}
             onApplyInsight={handleApplyInsight}
             onExploreFramework={handleExploreFramework}
@@ -295,6 +406,37 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
         onApplyInsight={handleApplyInsightToWriting}
         onAddressCounterArg={handleAddressCounterArg}
       />
+
+      {/* Prompt Customization Panel */}
+      <PromptCustomizationPanel
+        isOpen={showPromptCustomization}
+        onClose={() => setShowPromptCustomization(false)}
+      />
+
+      {/* API Test Panel */}
+      {showAPITest && (
+        <div className="fixed inset-0 z-50 overflow-hidden">
+          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setShowAPITest(false)} />
+          <div className="fixed inset-y-0 right-0 w-full max-w-2xl bg-white shadow-xl">
+            <div className="flex h-full flex-col">
+              <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900">API Configuration Test</h2>
+                  <button
+                    onClick={() => setShowAPITest(false)}
+                    className="rounded-md p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <APITestPanel />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

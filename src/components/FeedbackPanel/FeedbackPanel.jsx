@@ -89,7 +89,7 @@ const FeedbackPanel = ({
         ) : (
           feedback.map((item, index) => (
             <div
-              key={item.id}
+              key={item.id || `feedback-${index}`}
               className="feedback-card-enter"
               style={{
                 animationDelay: `${Math.min(index * 150, 1000)}ms`, // Cap delay at 1 second
