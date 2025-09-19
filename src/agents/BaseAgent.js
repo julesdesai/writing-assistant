@@ -4,6 +4,7 @@
  */
 
 import aiService, { AI_PROVIDERS } from '../services/aiService';
+import { findTextSnippets } from '../utils/textMatching';
 
 // Agent capability requirements
 export const CAPABILITIES = {
@@ -21,7 +22,7 @@ export const CAPABILITIES = {
 export const MODEL_TIERS = {
   FAST: 'fast',        // gpt-4o-mini, fast responses, minimal tools
   STANDARD: 'standard', // gpt-4o, balanced performance
-  PREMIUM: 'premium'    // gpt-4, highest quality, all tools
+  PREMIUM: 'premium'    // gpt-4, highest quality, all tools - perhaps rename as sounds producty
 };
 
 // Model configuration mapping
@@ -432,6 +433,86 @@ export class BaseAgent {
       avgResponseTime: 0,
       confidenceScores: []
     };
+  }
+
+  /**
+   * Process position data for insights - converts textSnippets to positions if needed
+   */
+  processInsightPositions(insights, content) {
+    if (!Array.isArray(insights) || !content) {
+      return insights;
+    }
+
+    return insights.map(insight => {
+      // If insight already has positions, return as-is
+      if (insight.positions && insight.positions.length > 0) {
+        return insight;
+      }
+
+      // If insight has textSnippets, convert to positions
+      if (insight.textSnippets && Array.isArray(insight.textSnippets)) {
+        const matches = findTextSnippets(content, insight.textSnippets, 0.75);
+        
+        if (matches.length > 0) {
+          return {
+            ...insight,
+            positions: matches.map(match => ({
+              start: match.start,
+              end: match.end,
+              text: match.text,
+              similarity: match.similarity,
+              originalSnippet: match.originalSnippet
+            }))
+          };
+        }
+      }
+
+      // If insight has single position, convert to positions array
+      if (insight.position && !insight.positions) {
+        return {
+          ...insight,
+          positions: [{
+            start: insight.position.start,
+            end: insight.position.end,
+            text: content.substring(insight.position.start, insight.position.end)
+          }]
+        };
+      }
+
+      // Try to find position based on title or feedback content
+      if (!insight.positions || insight.positions.length === 0) {
+        const searchText = insight.title || insight.feedback || '';
+        if (searchText.length > 10) {
+          // Try to find a relevant snippet in the content
+          const matches = findTextSnippets(content, [searchText], 0.6);
+          if (matches.length > 0) {
+            return {
+              ...insight,
+              positions: [{
+                start: matches[0].start,
+                end: matches[0].end,
+                text: matches[0].text,
+                similarity: matches[0].similarity,
+                inferred: true
+              }]
+            };
+          }
+        }
+
+        // Fallback: add a position at the beginning with minimal text
+        return {
+          ...insight,
+          positions: [{
+            start: 0,
+            end: Math.min(50, content.length),
+            text: content.substring(0, Math.min(50, content.length)),
+            fallback: true
+          }]
+        };
+      }
+
+      return insight;
+    });
   }
   
   // Abstract methods to be implemented by subclasses

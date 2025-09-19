@@ -4,6 +4,8 @@
  */
 
 import { BaseAgent } from './BaseAgent';
+import { DynamicAgent } from './DynamicAgent';
+import { AGENT_TEMPLATES } from './AgentTemplates';
 
 // Task urgency levels for priority calculation
 export const URGENCY_LEVELS = {
@@ -27,6 +29,7 @@ export class AgentOrchestrator {
   constructor() {
     this.agents = new Map(); // agentId -> agent instance
     this.agentCapabilities = new Map(); // agentId -> capabilities array
+    this.dynamicAgents = new Map(); // userId -> Map of user's dynamic agents
     this.userPreferences = {
       preferredAgents: new Set(),
       blockedAgents: new Set(),
@@ -42,8 +45,17 @@ export class AgentOrchestrator {
       conflicts: 0,
       escalations: 0,
       avgDecisionTime: 0,
-      agentUsageStats: new Map()
+      agentUsageStats: new Map(),
+      dynamicAgentStats: {
+        totalCreated: 0,
+        totalUsage: 0,
+        averagePerformance: 0.5
+      }
     };
+    
+    // Dynamic agent management
+    this.maxDynamicAgentsPerUser = 10;
+    this.dynamicAgentCleanupThreshold = 30; // days
   }
   
   /**
@@ -613,6 +625,371 @@ export class AgentOrchestrator {
     this.orchestrationStats.avgDecisionTime = (
       (this.orchestrationStats.avgDecisionTime * (this.orchestrationStats.totalTasks - 1)) + decisionTime
     ) / this.orchestrationStats.totalTasks;
+  }
+
+  // ======================
+  // DYNAMIC AGENT MANAGEMENT
+  // ======================
+
+  /**
+   * Create a new dynamic agent from template
+   */
+  createDynamicAgentFromTemplate(userId, templateKey, customizations = {}) {
+    const template = AGENT_TEMPLATES[templateKey];
+    if (!template) {
+      throw new Error(`Template ${templateKey} not found`);
+    }
+
+    // Check user limits
+    this.checkUserAgentLimits(userId);
+
+    // Merge template with customizations
+    const agentConfig = {
+      ...template,
+      ...customizations,
+      created: new Date().toISOString(),
+      lastModified: new Date().toISOString(),
+      templateOrigin: templateKey,
+      userId,
+      isTemplate: false
+    };
+
+    return this.createDynamicAgent(userId, agentConfig);
+  }
+
+  /**
+   * Create a completely custom dynamic agent
+   */
+  createDynamicAgent(userId, config) {
+    // Validate configuration
+    this.validateDynamicAgentConfig(config);
+    
+    // Check user limits
+    this.checkUserAgentLimits(userId);
+
+    // Create the dynamic agent
+    const dynamicAgent = new DynamicAgent({
+      ...config,
+      userId
+    });
+
+    // Initialize user's dynamic agents map if needed
+    if (!this.dynamicAgents.has(userId)) {
+      this.dynamicAgents.set(userId, new Map());
+    }
+
+    // Store the agent
+    const userAgents = this.dynamicAgents.get(userId);
+    userAgents.set(dynamicAgent.agentId, dynamicAgent);
+
+    // Register with orchestrator
+    this.registerAgent(dynamicAgent.agentId, dynamicAgent);
+
+    // Update stats
+    this.orchestrationStats.dynamicAgentStats.totalCreated++;
+
+    console.log(`Created dynamic agent: ${dynamicAgent.name} (${dynamicAgent.agentId}) for user ${userId}`);
+
+    return dynamicAgent;
+  }
+
+  /**
+   * Update an existing dynamic agent
+   */
+  updateDynamicAgent(userId, agentId, updates) {
+    const userAgents = this.dynamicAgents.get(userId);
+    if (!userAgents || !userAgents.has(agentId)) {
+      throw new Error(`Dynamic agent ${agentId} not found for user ${userId}`);
+    }
+
+    const agent = userAgents.get(agentId);
+    if (!(agent instanceof DynamicAgent)) {
+      throw new Error(`Agent ${agentId} is not a dynamic agent`);
+    }
+
+    // Validate updates
+    this.validateDynamicAgentConfig(updates, true);
+
+    // Apply updates
+    agent.updateConfig(updates);
+
+    console.log(`Updated dynamic agent: ${agent.name} (${agentId})`);
+
+    return agent;
+  }
+
+  /**
+   * Delete a dynamic agent
+   */
+  deleteDynamicAgent(userId, agentId) {
+    const userAgents = this.dynamicAgents.get(userId);
+    if (!userAgents || !userAgents.has(agentId)) {
+      throw new Error(`Dynamic agent ${agentId} not found for user ${userId}`);
+    }
+
+    // Unregister from orchestrator
+    this.unregisterAgent(agentId);
+
+    // Remove from user's agents
+    userAgents.delete(agentId);
+
+    // Clean up empty user maps
+    if (userAgents.size === 0) {
+      this.dynamicAgents.delete(userId);
+    }
+
+    console.log(`Deleted dynamic agent: ${agentId} for user ${userId}`);
+  }
+
+  /**
+   * Clone an existing dynamic agent
+   */
+  cloneDynamicAgent(userId, agentId, modifications = {}) {
+    const userAgents = this.dynamicAgents.get(userId);
+    if (!userAgents || !userAgents.has(agentId)) {
+      throw new Error(`Dynamic agent ${agentId} not found for user ${userId}`);
+    }
+
+    const originalAgent = userAgents.get(agentId);
+    if (!(originalAgent instanceof DynamicAgent)) {
+      throw new Error(`Agent ${agentId} is not a dynamic agent`);
+    }
+
+    // Check user limits
+    this.checkUserAgentLimits(userId);
+
+    // Clone with modifications
+    const clonedAgent = originalAgent.clone({
+      ...modifications,
+      name: modifications.name || `${originalAgent.name} (Copy)`,
+      userId
+    });
+
+    // Store the cloned agent
+    userAgents.set(clonedAgent.agentId, clonedAgent);
+    this.registerAgent(clonedAgent.agentId, clonedAgent);
+
+    console.log(`Cloned dynamic agent: ${originalAgent.name} -> ${clonedAgent.name}`);
+
+    return clonedAgent;
+  }
+
+  /**
+   * Get all dynamic agents for a user
+   */
+  getUserDynamicAgents(userId) {
+    const userAgents = this.dynamicAgents.get(userId);
+    if (!userAgents) {
+      return [];
+    }
+
+    return Array.from(userAgents.values()).map(agent => ({
+      ...agent.exportConfig(),
+      performanceMetrics: agent.getPerformanceMetrics(),
+      learningMetrics: agent.getLearningMetrics()
+    }));
+  }
+
+  /**
+   * Get a specific dynamic agent
+   */
+  getDynamicAgent(userId, agentId) {
+    const userAgents = this.dynamicAgents.get(userId);
+    if (!userAgents || !userAgents.has(agentId)) {
+      return null;
+    }
+
+    const agent = userAgents.get(agentId);
+    return {
+      ...agent.exportConfig(),
+      performanceMetrics: agent.getPerformanceMetrics(),
+      learningMetrics: agent.getLearningMetrics()
+    };
+  }
+
+  /**
+   * Process feedback for a dynamic agent
+   */
+  processDynamicAgentFeedback(userId, agentId, feedback) {
+    const userAgents = this.dynamicAgents.get(userId);
+    if (!userAgents || !userAgents.has(agentId)) {
+      throw new Error(`Dynamic agent ${agentId} not found for user ${userId}`);
+    }
+
+    const agent = userAgents.get(agentId);
+    if (!(agent instanceof DynamicAgent)) {
+      throw new Error(`Agent ${agentId} is not a dynamic agent`);
+    }
+
+    agent.processFeedback(feedback);
+
+    // Update system-wide dynamic agent performance
+    this.updateDynamicAgentStats();
+
+    console.log(`Processed feedback for dynamic agent: ${agent.name}`);
+  }
+
+  /**
+   * Export dynamic agent configuration for sharing/backup
+   */
+  exportDynamicAgent(userId, agentId) {
+    const userAgents = this.dynamicAgents.get(userId);
+    if (!userAgents || !userAgents.has(agentId)) {
+      throw new Error(`Dynamic agent ${agentId} not found for user ${userId}`);
+    }
+
+    const agent = userAgents.get(agentId);
+    return {
+      ...agent.exportConfig(),
+      exportedAt: new Date().toISOString(),
+      version: '1.0'
+    };
+  }
+
+  /**
+   * Import dynamic agent configuration
+   */
+  importDynamicAgent(userId, exportedConfig) {
+    if (!exportedConfig || exportedConfig.version !== '1.0') {
+      throw new Error('Invalid or unsupported agent export format');
+    }
+
+    // Remove import-specific metadata
+    const { exportedAt, version, agentId, created, userId: originalUserId, ...config } = exportedConfig;
+
+    // Create new agent with imported config
+    return this.createDynamicAgent(userId, {
+      ...config,
+      name: `${config.name} (Imported)`
+    });
+  }
+
+  /**
+   * Get dynamic agent usage statistics
+   */
+  getDynamicAgentStats() {
+    const stats = {
+      ...this.orchestrationStats.dynamicAgentStats,
+      activeAgents: 0,
+      agentsByUser: {},
+      topPerformers: [],
+      recentActivity: []
+    };
+
+    // Count active agents and collect performance data
+    const allAgents = [];
+    for (const [userId, userAgents] of this.dynamicAgents) {
+      stats.agentsByUser[userId] = userAgents.size;
+      stats.activeAgents += userAgents.size;
+
+      for (const agent of userAgents.values()) {
+        allAgents.push({
+          userId,
+          agentId: agent.agentId,
+          name: agent.name,
+          ...agent.getLearningMetrics()
+        });
+      }
+    }
+
+    // Sort by performance and get top performers
+    stats.topPerformers = allAgents
+      .sort((a, b) => (b.recentRating * b.helpfulnessRate) - (a.recentRating * a.helpfulnessRate))
+      .slice(0, 10);
+
+    return stats;
+  }
+
+  /**
+   * Clean up old or unused dynamic agents
+   */
+  cleanupDynamicAgents() {
+    const now = new Date();
+    const thresholdDate = new Date(now.getTime() - (this.dynamicAgentCleanupThreshold * 24 * 60 * 60 * 1000));
+    
+    let cleanedCount = 0;
+
+    for (const [userId, userAgents] of this.dynamicAgents) {
+      const agentsToDelete = [];
+
+      for (const [agentId, agent] of userAgents) {
+        const lastUsed = new Date(agent.lastModified);
+        
+        // Mark for deletion if old and unused
+        if (lastUsed < thresholdDate && agent.usageCount === 0) {
+          agentsToDelete.push(agentId);
+        }
+      }
+
+      // Delete marked agents
+      for (const agentId of agentsToDelete) {
+        this.deleteDynamicAgent(userId, agentId);
+        cleanedCount++;
+      }
+    }
+
+    console.log(`Cleaned up ${cleanedCount} unused dynamic agents`);
+    return cleanedCount;
+  }
+
+  // ======================
+  // HELPER METHODS
+  // ======================
+
+  /**
+   * Check if user has reached agent limits
+   */
+  checkUserAgentLimits(userId) {
+    const userAgents = this.dynamicAgents.get(userId);
+    if (userAgents && userAgents.size >= this.maxDynamicAgentsPerUser) {
+      throw new Error(`User ${userId} has reached the maximum limit of ${this.maxDynamicAgentsPerUser} dynamic agents`);
+    }
+  }
+
+  /**
+   * Validate dynamic agent configuration
+   */
+  validateDynamicAgentConfig(config, isUpdate = false) {
+    const required = isUpdate ? [] : ['name', 'specialization', 'customPrompt'];
+    
+    for (const field of required) {
+      if (!config[field] || config[field].trim().length === 0) {
+        throw new Error(`${field} is required for dynamic agent`);
+      }
+    }
+
+    if (config.customPrompt && config.customPrompt.length > 2000) {
+      throw new Error('Custom prompt must be under 2000 characters');
+    }
+
+    if (config.name && config.name.length > 100) {
+      throw new Error('Agent name must be under 100 characters');
+    }
+
+    if (config.description && config.description.length > 500) {
+      throw new Error('Agent description must be under 500 characters');
+    }
+  }
+
+  /**
+   * Update system-wide dynamic agent performance statistics
+   */
+  updateDynamicAgentStats() {
+    let totalUsage = 0;
+    let totalPerformance = 0;
+    let agentCount = 0;
+
+    for (const userAgents of this.dynamicAgents.values()) {
+      for (const agent of userAgents.values()) {
+        totalUsage += agent.usageCount;
+        totalPerformance += agent.learningData.averageConfidence;
+        agentCount++;
+      }
+    }
+
+    this.orchestrationStats.dynamicAgentStats.totalUsage = totalUsage;
+    this.orchestrationStats.dynamicAgentStats.averagePerformance = 
+      agentCount > 0 ? totalPerformance / agentCount : 0.5;
   }
   
   // Helper methods for content analysis

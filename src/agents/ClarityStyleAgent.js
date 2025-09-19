@@ -174,8 +174,11 @@ REMEMBER: You are analyzing HOW the text is written, never WHAT the text claims.
         throw new Error('Expected array of issues');
       }
       
+      // Process positions for each issue
+      const issuesWithPositions = this.processInsightPositions(issues, context.content);
+      
       // Validate and enhance each issue
-      const processedIssues = issues
+      const processedIssues = issuesWithPositions
         .filter(issue => {
           // Filter out any fact-checking or content-related issues
           const factCheckingKeywords = ['fact', 'evidence', 'source', 'claim', 'verify', 'accurate', 'statistic', 'data', 'research', 'study'];
@@ -232,9 +235,10 @@ REMEMBER: You are analyzing HOW the text is written, never WHAT the text claims.
       
       // Fallback: use quick analysis results
       const fallbackInsights = this.generateFallbackInsights(context.content);
+      const fallbackWithPositions = this.processInsightPositions(fallbackInsights, context.content);
       
       return {
-        insights: fallbackInsights,
+        insights: fallbackWithPositions,
         confidence: 0.4, // Low confidence for fallback
         readabilityScore: this.calculateReadabilityScore(context.content, []),
         summary: 'Basic analysis completed with limited parsing',

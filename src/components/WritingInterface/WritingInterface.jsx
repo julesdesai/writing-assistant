@@ -7,8 +7,10 @@ import PromptCustomizationPanel from '../PromptCustomization/PromptCustomization
 import APITestPanel from '../Debug/APITestPanel';
 import { useWritingAnalysis } from '../../hooks/useWritingAnalysis';
 import { useMultiAgentAnalysis } from '../../hooks/useMultiAgentAnalysis';
+import { useUnifiedAgentCustomization } from '../../hooks/useUnifiedAgentCustomization';
 import { createComplexFromWriting, applyComplexInsight } from '../../agents/inquiryIntegrationAgent';
 import inquiryComplexService from '../../services/inquiryComplexService';
+import UnifiedAgentCustomizationPanel from '../AgentCustomization/UnifiedAgentCustomizationPanel';
 
 const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeedback, onBackToPurpose, project, writingCriteria }) => {
   const [isMonitoring, setIsMonitoring] = useState(true);
@@ -19,14 +21,17 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
   const [activeComplexes, setActiveComplexes] = useState([]);
   const [useMultiAgentSystem, setUseMultiAgentSystem] = useState(true); // Feature flag
   const [multiAgentFeedback, setMultiAgentFeedback] = useState([]);
-  const [showPromptCustomization, setShowPromptCustomization] = useState(false);
   const [showAPITest, setShowAPITest] = useState(false);
+  const [showAgentCustomization, setShowAgentCustomization] = useState(false);
   
   // Legacy writing analysis hook
   const legacyAnalysis = useWritingAnalysis(content, purpose, isMonitoring && !useMultiAgentSystem, writingCriteria);
   
   // New multi-agent analysis hook
   const multiAgentAnalysis = useMultiAgentAnalysis();
+  
+  // Unified agent customization hook
+  const agentCustomization = useUnifiedAgentCustomization();
   
   // Multi-agent feedback management functions
   const handleMultiAgentDismiss = (feedbackId) => {
@@ -290,6 +295,8 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
         onBackToPurpose={onBackToPurpose}
         onDocumentAnalysis={currentAnalysis.runDocumentAnalysis}
         isDocumentAnalyzing={currentAnalysis.isDocumentAnalyzing}
+        onOpenAgentCustomization={() => setShowAgentCustomization(true)}
+        customizationSummary={agentCustomization.getCustomizationSummary()}
       />
       
       {/* Multi-Agent System Toggle & Prompt Customization */}
@@ -303,10 +310,10 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
               </span>
             </div>
             <button
-              onClick={() => setShowPromptCustomization(true)}
-              className="text-xs text-blue-600 hover:text-blue-800 underline"
+              onClick={() => setShowAgentCustomization(true)}
+              className="text-xs text-purple-600 hover:text-purple-800 underline"
             >
-              Customize Prompts
+              Customize Agents
             </button>
             <button
               onClick={() => setShowAPITest(true)}
@@ -407,10 +414,10 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
         onAddressCounterArg={handleAddressCounterArg}
       />
 
-      {/* Prompt Customization Panel */}
-      <PromptCustomizationPanel
-        isOpen={showPromptCustomization}
-        onClose={() => setShowPromptCustomization(false)}
+      {/* Unified Agent Customization Panel */}
+      <UnifiedAgentCustomizationPanel
+        isOpen={showAgentCustomization}
+        onClose={() => setShowAgentCustomization(false)}
       />
 
       {/* API Test Panel */}

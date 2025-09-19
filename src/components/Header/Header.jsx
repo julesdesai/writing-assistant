@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, ArrowLeft, FileText } from 'lucide-react';
+import { Play, Pause, ArrowLeft, FileText, Settings } from 'lucide-react';
 
 const Header = ({ 
   purpose, 
@@ -8,7 +8,9 @@ const Header = ({
   onClearFeedback, 
   onBackToPurpose,
   onDocumentAnalysis,
-  isDocumentAnalyzing
+  isDocumentAnalyzing,
+  onOpenAgentCustomization,
+  customizationSummary = { total: 0, customizedBuiltIn: 0, dynamicAgents: 0 }
 }) => {
   return (
     <div className="bg-white border-b border-slate-200 p-4">
@@ -29,6 +31,21 @@ const Header = ({
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {onOpenAgentCustomization && (
+            <button
+              onClick={onOpenAgentCustomization}
+              className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 hover:bg-purple-200 rounded-lg font-medium transition-colors relative"
+              title="Customize Agents & Prompts"
+            >
+              <Settings className="w-4 h-4" />
+              Agent Settings
+              {customizationSummary.total > 0 && (
+                <span className="absolute -top-1 -right-1 bg-purple-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                  {customizationSummary.total}
+                </span>
+              )}
+            </button>
+          )}
           <button
             onClick={onDocumentAnalysis}
             disabled={isDocumentAnalyzing}
