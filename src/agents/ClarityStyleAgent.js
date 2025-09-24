@@ -5,6 +5,7 @@
  */
 
 import { BaseAgent, MODEL_TIERS, CAPABILITIES } from './BaseAgent';
+import promptCustomizationService from '../services/promptCustomizationService';
 
 export class ClarityStyleAgent extends BaseAgent {
   constructor() {
@@ -15,7 +16,8 @@ export class ClarityStyleAgent extends BaseAgent {
       requiredCapabilities: [CAPABILITIES.STYLE_ANALYSIS],
       escalationThreshold: 0.75,
       maxRetries: 2,
-      contextLimits: { maxTokens: 1500 }
+      contextLimits: { maxTokens: 1500 },
+      debugPrompts: true // Enable prompt debugging to verify customizations
     });
     
     // Pre-compiled patterns for quick style analysis
@@ -90,14 +92,23 @@ export class ClarityStyleAgent extends BaseAgent {
   generatePrompt(context, modelConfig) {
     const { content, purpose, taskType } = context;
     
-    // Quick pre-analysis to focus the AI
-    const quickAnalysis = this.performQuickAnalysis(content);
-    const focusAreas = this.generateFocusAreas(quickAnalysis);
-    
-    // For now, use default prompt - customization will be handled at a higher level
-    // TODO: Integrate with prompt customization service
-    
-    return `You are a writing clarity and style specialist. Analyze the following text ONLY for grammar, readability, and style issues. 
+    // Try to use customized prompt first
+    try {
+      return promptCustomizationService.generatePrompt(
+        'clarityStyle',
+        content,
+        purpose,
+        'analysis',
+        this.generateAdditionalCriteria(content)
+      );
+    } catch (error) {
+      console.warn('[ClarityStyleAgent] Failed to get customized prompt, using fallback:', error);
+      
+      // Fallback to default prompt
+      const quickAnalysis = this.performQuickAnalysis(content);
+      const focusAreas = this.generateFocusAreas(quickAnalysis);
+      
+      return `You are a writing clarity and style specialist. Analyze the following text ONLY for grammar, readability, and style issues. 
 
 IMPORTANT: Do NOT analyze factual content, claims, evidence, or arguments. Focus exclusively on how the text is written, not what it says.
 
@@ -148,6 +159,46 @@ Priority order: Grammar errors (high), clarity issues (medium), style preference
 If no significant writing issues found, return empty array [].
 
 REMEMBER: You are analyzing HOW the text is written, never WHAT the text claims. Ignore all factual content.`;
+    }
+  }
+  
+  /**
+   * Generate additional criteria based on quick analysis
+   */
+  generateAdditionalCriteria(content) {
+    const quickAnalysis = this.performQuickAnalysis(content);
+    const focusAreas = [];
+    
+    if (quickAnalysis.passiveVoice > 2) {
+      focusAreas.push('passive voice usage');
+    }
+    if (quickAnalysis.weakVerbs > 3) {
+      focusAreas.push('weak verb choices');
+    }
+    if (quickAnalysis.redundancy > 1) {
+      focusAreas.push('redundant expressions');
+    }
+    if (quickAnalysis.wordiness > 2) {
+      focusAreas.push('wordy phrases');
+    }
+    if (quickAnalysis.sentenceLength > this.readabilityThresholds.avgSentenceLength.warning) {
+      focusAreas.push('sentence length and complexity');
+    }
+    if (quickAnalysis.grammarIssues > 0) {
+      focusAreas.push('grammar and punctuation');
+    }
+    
+    return {
+      focusAreas: focusAreas.join(', '),
+      readabilityMetrics: quickAnalysis.readabilityMetrics,
+      detectedIssues: {
+        passiveVoice: quickAnalysis.passiveVoice,
+        weakVerbs: quickAnalysis.weakVerbs,
+        redundancy: quickAnalysis.redundancy,
+        wordiness: quickAnalysis.wordiness,
+        grammarIssues: quickAnalysis.grammarIssues
+      }
+    };
   }
   
   /**

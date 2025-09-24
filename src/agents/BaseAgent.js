@@ -70,7 +70,8 @@ export class BaseAgent {
     requiredCapabilities = [],
     escalationThreshold = 0.75,
     maxRetries = 2,
-    contextLimits = { maxTokens: 2000 }
+    contextLimits = { maxTokens: 2000 },
+    debugPrompts = false
   }) {
     this.name = name;
     this.description = description;
@@ -79,6 +80,7 @@ export class BaseAgent {
     this.escalationThreshold = escalationThreshold;
     this.maxRetries = maxRetries;
     this.contextLimits = contextLimits;
+    this.debugPrompts = debugPrompts;
     
     // Performance tracking
     this.stats = {
@@ -189,6 +191,8 @@ export class BaseAgent {
    * Execute analysis with model selection and escalation logic
    */
   async analyze(content, options = {}) {
+    console.log(`[${this.name}] *** ANALYZE METHOD CALLED ***`);
+    
     const startTime = Date.now();
     const {
       taskComplexity = 'medium',
@@ -234,13 +238,23 @@ export class BaseAgent {
         const context = this.prepareContext(content, additionalContext);
         
         // Generate prompt using agent-specific logic
+        console.log(`[${this.name}] *** ABOUT TO CALL generatePrompt ***`);
         console.log(`[${this.name}] Generating prompt for context:`, { contextLength: context?.content?.length });
         let prompt;
         try {
+          console.log(`[${this.name}] *** CALLING generatePrompt NOW ***`);
           prompt = this.generatePrompt(context, modelConfig);
+          console.log(`[${this.name}] *** generatePrompt RETURNED ***`);
           console.log(`[${this.name}] Generated prompt length:`, prompt?.length);
+          
+          // LOG THE ACTUAL PROMPT FOR DEBUGGING CUSTOMIZATIONS
+          // Always log for now to debug the issue
+          console.log(`\n===== ${this.name} PROMPT =====`);
+          console.log(prompt);
+          console.log(`===== END ${this.name} PROMPT =====\n`);
+          
         } catch (promptError) {
-          console.error(`[${this.name}] Failed to generate prompt:`, promptError);
+          console.error(`[${this.name}] *** generatePrompt FAILED ***:`, promptError);
           throw promptError;
         }
         
@@ -321,6 +335,7 @@ export class BaseAgent {
       });
       
       console.log(`[${this.name}] API call successful, response length:`, result?.length);
+      console.log(`[${this.name}] API RESPONSE:`, result);
       return result;
     } catch (error) {
       console.error(`[${this.name}] API call failed with error:`, {

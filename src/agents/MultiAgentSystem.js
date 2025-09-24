@@ -51,7 +51,8 @@ export class MultiAgentSystem {
       speedPriority: 0.5, // 0-1 scale
       preferredAgentTypes: new Set(),
       feedbackHistory: [],
-      adaptiveThresholds: {}
+      adaptiveThresholds: {},
+      enabledAgents: new Map() // Track which agents are enabled/disabled
     };
   }
   
@@ -62,14 +63,22 @@ export class MultiAgentSystem {
     if (this.initialized) return;
     
     try {
-      // Register all agents
-      this.orchestrator.registerAgent('logical_fallacy_detector', new LogicalFallacyDetector());
-      this.orchestrator.registerAgent('clarity_style_agent', new ClarityStyleAgent());
-      this.orchestrator.registerAgent('quick_fact_checker', new QuickFactChecker());
-      this.orchestrator.registerAgent('evidence_quality_agent', new EvidenceQualityAgent());
-      this.orchestrator.registerAgent('contextual_research_critic', new ContextualResearchCritic());
-      this.orchestrator.registerAgent('deep_fact_verification_agent', new DeepFactVerificationAgent());
-      this.orchestrator.registerAgent('purpose_fulfillment_agent', new PurposeFulfillmentAgent());
+      // Register all agents with default enabled state
+      const agentConfigs = [
+        { id: 'logical_fallacy_detector', instance: new LogicalFallacyDetector(), enabled: true },
+        { id: 'clarity_style_agent', instance: new ClarityStyleAgent(), enabled: true },
+        { id: 'quick_fact_checker', instance: new QuickFactChecker(), enabled: true },
+        { id: 'evidence_quality_agent', instance: new EvidenceQualityAgent(), enabled: true },
+        { id: 'contextual_research_critic', instance: new ContextualResearchCritic(), enabled: true },
+        { id: 'deep_fact_verification_agent', instance: new DeepFactVerificationAgent(), enabled: true },
+        { id: 'purpose_fulfillment_agent', instance: new PurposeFulfillmentAgent(), enabled: true }
+      ];
+      
+      for (const config of agentConfigs) {
+        this.orchestrator.registerAgent(config.id, config.instance);
+        // Set default enabled state (can be overridden by user preferences)
+        this.userPreferences.enabledAgents.set(config.id, config.enabled);
+      }
       
       // Load user preferences
       await this.loadUserPreferences();
@@ -132,12 +141,15 @@ export class MultiAgentSystem {
         throw new Error('Orchestrator not available');
       }
       
+      // Filter enabled agents for analysis
+      const enabledAgents = this.getEnabledAgents();
+      
       // Start progressive analysis
       const result = await this.orchestrator.startProgressiveAnalysis(content, {
         urgency,
         budget,
         maxParallelAgents: this.calculateMaxParallelAgents(budget, urgency),
-        requestedAgents,
+        requestedAgents: requestedAgents || enabledAgents,
         onProgress: (progress) => {
           // Add system context to progress
           const enhancedProgress = {
@@ -496,7 +508,8 @@ export class MultiAgentSystem {
         this.userPreferences = {
           ...this.userPreferences,
           ...parsed,
-          preferredAgentTypes: new Set(parsed.preferredAgentTypes || [])
+          preferredAgentTypes: new Set(parsed.preferredAgentTypes || []),
+          enabledAgents: new Map(parsed.enabledAgents || [])
         };
       }
     } catch (error) {
@@ -511,7 +524,8 @@ export class MultiAgentSystem {
     try {
       const toSave = {
         ...this.userPreferences,
-        preferredAgentTypes: Array.from(this.userPreferences.preferredAgentTypes)
+        preferredAgentTypes: Array.from(this.userPreferences.preferredAgentTypes),
+        enabledAgents: Array.from(this.userPreferences.enabledAgents)
       };
       localStorage.setItem('multiAgentSystem_userPreferences', JSON.stringify(toSave));
     } catch (error) {
@@ -530,8 +544,14 @@ export class MultiAgentSystem {
       speedPriority: 0.5,
       preferredAgentTypes: new Set(),
       feedbackHistory: [],
-      adaptiveThresholds: {}
+      adaptiveThresholds: {},
+      enabledAgents: new Map()
     };
+    
+    // Reset all agents to enabled state
+    for (const agentId of this.orchestrator.agents.keys()) {
+      this.userPreferences.enabledAgents.set(agentId, true);
+    }
     
     // Reset agent thresholds
     for (const [agentId, agent] of this.orchestrator.agents) {
@@ -544,6 +564,64 @@ export class MultiAgentSystem {
     localStorage.removeItem('multiAgentSystem_userPreferences');
     
     console.log('Multi-Agent System reset to defaults');
+  }
+  
+  /**
+   * Toggle agent enabled/disabled state
+   */
+  toggleAgent(agentId, enabled) {
+    if (this.orchestrator.agents.has(agentId)) {
+      this.userPreferences.enabledAgents.set(agentId, enabled);
+      this.saveUserPreferences();
+      console.log(`Agent ${agentId} ${enabled ? 'enabled' : 'disabled'}`);
+      console.log('Current enabled agents:', Array.from(this.userPreferences.enabledAgents.entries()));
+      return true;
+    }
+    return false;
+  }
+  
+  /**
+   * Get list of enabled agent IDs
+   */
+  getEnabledAgents() {
+    const enabledAgents = [];
+    for (const [agentId, enabled] of this.userPreferences.enabledAgents) {
+      if (enabled) {
+        enabledAgents.push(agentId);
+      }
+    }
+    return enabledAgents;
+  }
+  
+  /**
+   * Get all available agents with their enabled state
+   */
+  getAllAgentsStatus() {
+    const agentsStatus = [];
+    for (const [agentId, agent] of this.orchestrator.agents) {
+      agentsStatus.push({
+        id: agentId,
+        name: agent.name,
+        description: agent.description,
+        enabled: this.userPreferences.enabledAgents.get(agentId) || false,
+        capabilities: agent.requiredCapabilities || [],
+        defaultTier: agent.defaultTier
+      });
+    }
+    return agentsStatus;
+  }
+  
+  /**
+   * Enable multiple agents at once
+   */
+  setMultipleAgentsEnabled(agentIds, enabled) {
+    let changedCount = 0;
+    for (const agentId of agentIds) {
+      if (this.toggleAgent(agentId, enabled)) {
+        changedCount++;
+      }
+    }
+    return changedCount;
   }
 }
 

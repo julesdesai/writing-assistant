@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { createMultiAgentSystem } from '../agents';
+import { UserMultiAgentSystem } from '../agents/UserMultiAgentSystem';
 
 export const useMultiAgentAnalysis = (options = {}) => {
   const [system, setSystem] = useState(null);
@@ -37,7 +37,8 @@ export const useMultiAgentAnalysis = (options = {}) => {
       if (systemInitializedRef.current) return;
       
       try {
-        const multiAgentSystem = await createMultiAgentSystem();
+        const multiAgentSystem = new UserMultiAgentSystem();
+        await multiAgentSystem.initialize();
         setSystem(multiAgentSystem);
         systemInitializedRef.current = true;
       } catch (error) {
@@ -146,6 +147,12 @@ export const useMultiAgentAnalysis = (options = {}) => {
     try {
       const result = await system.analyzeContent(content, analysisConfig);
       currentAnalysisRef.current = result.analysisId;
+      
+      // Set the results in the hook state for UI consumption
+      console.log('[useMultiAgentAnalysis] Setting results:', result);
+      setFastResults(result);
+      setLoading(false);
+      
       return result;
       
     } catch (error) {
@@ -155,6 +162,7 @@ export const useMultiAgentAnalysis = (options = {}) => {
       
       // Fallback to legacy system if enabled
       if (enableFallback) {
+        console.warn('Multi-agent analysis failed, falling back to legacy system. Agent toggles will not be respected in fallback mode.');
         return await fallbackToLegacyAnalysis(content, analysisOptions);
       }
       

@@ -5,6 +5,7 @@
  */
 
 import { BaseAgent, MODEL_TIERS, CAPABILITIES } from './BaseAgent';
+import promptCustomizationService from '../services/promptCustomizationService';
 
 export class LogicalFallacyDetector extends BaseAgent {
   constructor() {
@@ -15,7 +16,8 @@ export class LogicalFallacyDetector extends BaseAgent {
       requiredCapabilities: [CAPABILITIES.LOGICAL_ANALYSIS],
       escalationThreshold: 0.7,
       maxRetries: 2,
-      contextLimits: { maxTokens: 1500 } // Shorter context for fast response
+      contextLimits: { maxTokens: 1500 }, // Shorter context for fast response
+      debugPrompts: true // Enable prompt debugging to verify customizations
     });
     
     // Pre-compiled fallacy patterns for quick matching
@@ -65,13 +67,25 @@ export class LogicalFallacyDetector extends BaseAgent {
   generatePrompt(context, modelConfig) {
     const { content, purpose, taskType } = context;
     
-    // Quick pre-screening to focus the AI's attention
-    const potentialFallacies = this.quickFallacyScreen(content);
-    const focusAreas = potentialFallacies.length > 0 
-      ? `\nFocus especially on these potential issues: ${potentialFallacies.join(', ')}`
-      : '';
-    
-    return `You are a logical fallacy detection specialist. Analyze the following text for logical fallacies and weak reasoning patterns.
+    // Try to use customized prompt first
+    try {
+      return promptCustomizationService.generatePrompt(
+        'logicalFallacy',
+        content,
+        purpose,
+        'analysis',
+        this.generateAdditionalCriteria(content)
+      );
+    } catch (error) {
+      console.warn('[LogicalFallacyDetector] Failed to get customized prompt, using fallback:', error);
+      
+      // Fallback to default prompt
+      const potentialFallacies = this.quickFallacyScreen(content);
+      const focusAreas = potentialFallacies.length > 0 
+        ? `\nFocus especially on these potential issues: ${potentialFallacies.join(', ')}`
+        : '';
+      
+      return `You are a logical fallacy detection specialist. Analyze the following text for logical fallacies and weak reasoning patterns.
 
 TEXT TO ANALYZE:
 ${content}
@@ -109,6 +123,23 @@ Respond with ONLY valid JSON:
 
 If no fallacies found, return empty array [].
 Be precise - only flag actual logical errors, not just weak arguments.`;
+    }
+  }
+  
+  /**
+   * Generate additional criteria based on quick analysis
+   */
+  generateAdditionalCriteria(content) {
+    const potentialFallacies = this.quickFallacyScreen(content);
+    
+    return {
+      potentialFallacies: potentialFallacies.join(', '),
+      triggerCount: this.quickTriggers.filter(trigger => 
+        content.toLowerCase().includes(trigger)
+      ).length,
+      contentLength: content.length,
+      analysisMode: 'fast_detection'
+    };
   }
   
   /**

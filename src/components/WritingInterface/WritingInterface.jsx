@@ -12,8 +12,7 @@ import { createComplexFromWriting, applyComplexInsight } from '../../agents/inqu
 import inquiryComplexService from '../../services/inquiryComplexService';
 import UnifiedAgentCustomizationPanel from '../AgentCustomization/UnifiedAgentCustomizationPanel';
 
-const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeedback, onBackToPurpose, project, writingCriteria }) => {
-  const [isMonitoring, setIsMonitoring] = useState(true);
+const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeedback, onBackToPurpose, project, writingCriteria, isMonitoring, onToggleMonitoring }) => {
   const [hoveredFeedback, setHoveredFeedback] = useState(null);
   const [initialComplexes, setInitialComplexes] = useState([]);
   const [dialecticalSidebarOpen, setDialecticalSidebarOpen] = useState(false);
@@ -115,21 +114,29 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
 
   // Sync multi-agent results to local feedback state
   useEffect(() => {
+    console.log('[WritingInterface] multiAgentAnalysis.results:', multiAgentAnalysis.results);
     if (useMultiAgentSystem && multiAgentAnalysis.results?.insights) {
+      console.log('[WritingInterface] Processing insights:', multiAgentAnalysis.results.insights);
       const newInsights = multiAgentAnalysis.results.insights.map(insight => ({
         ...insight,
         id: insight.id || `insight-${Date.now()}-${Math.random()}`,
         timestamp: new Date(),
         status: 'active'
       }));
+      console.log('[WritingInterface] newInsights processed:', newInsights);
       
       setMultiAgentFeedback(prev => {
         // Only add new insights that aren't already in the list
         const existingIds = new Set(prev.map(item => item.id));
         const uniqueNewInsights = newInsights.filter(insight => !existingIds.has(insight.id));
         
+        console.log('[WritingInterface] uniqueNewInsights:', uniqueNewInsights);
+        console.log('[WritingInterface] Current multiAgentFeedback length:', prev.length);
+        
         if (uniqueNewInsights.length > 0) {
-          return [...prev, ...uniqueNewInsights];
+          const updated = [...prev, ...uniqueNewInsights];
+          console.log('[WritingInterface] Updated multiAgentFeedback length:', updated.length);
+          return updated;
         }
         return prev;
       });
@@ -140,16 +147,22 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
   useEffect(() => {
     if (useMultiAgentSystem && isMonitoring && content && content.length > 50) {
       const timeoutId = setTimeout(() => {
-        multiAgentAnalysis.analyze(content, { purpose, writingCriteria });
+        // Get enabled agent IDs for the analysis
+        const enabledAgents = multiAgentAnalysis.system?.getAllAgentsStatus()?.filter(a => a.enabled).map(a => a.id) || [];
+        console.log('Auto-analysis starting with enabled agents:', enabledAgents);
+        
+        multiAgentAnalysis.analyze(content, { 
+          purpose, 
+          writingCriteria,
+          requestedAgents: enabledAgents 
+        });
       }, 1500); // Debounce analysis
       
       return () => clearTimeout(timeoutId);
     }
   }, [content, isMonitoring, useMultiAgentSystem, purpose]);
 
-  const handleToggleMonitoring = () => {
-    setIsMonitoring(!isMonitoring);
-  };
+  // Remove local handleToggleMonitoring since it's now passed as prop
 
   const handleFeedbackHover = (feedbackId) => {
     setHoveredFeedback(feedbackId);
@@ -289,53 +302,9 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
     <>
       <Header 
         purpose={purpose}
-        isMonitoring={isMonitoring}
-        onToggleMonitoring={handleToggleMonitoring}
-        onClearFeedback={currentAnalysis.clearFeedback}
         onBackToPurpose={onBackToPurpose}
-        onDocumentAnalysis={currentAnalysis.runDocumentAnalysis}
-        isDocumentAnalyzing={currentAnalysis.isDocumentAnalyzing}
-        onOpenAgentCustomization={() => setShowAgentCustomization(true)}
-        customizationSummary={agentCustomization.getCustomizationSummary()}
       />
       
-      {/* Multi-Agent System Toggle & Prompt Customization */}
-      <div className="max-w-7xl mx-auto px-6 py-2">
-        <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-blue-900">🤖 Multi-Agent System</span>
-              <span className="text-xs text-blue-700">
-                {useMultiAgentSystem ? 'Enhanced AI Critics (6 specialized agents)' : 'Legacy System'}
-              </span>
-            </div>
-            <button
-              onClick={() => setShowAgentCustomization(true)}
-              className="text-xs text-purple-600 hover:text-purple-800 underline"
-            >
-              Customize Agents
-            </button>
-            <button
-              onClick={() => setShowAPITest(true)}
-              className="text-xs text-orange-600 hover:text-orange-800 underline"
-            >
-              Test API
-            </button>
-          </div>
-          <button
-            onClick={() => setUseMultiAgentSystem(!useMultiAgentSystem)}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-              useMultiAgentSystem ? 'bg-blue-600' : 'bg-gray-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                useMultiAgentSystem ? 'translate-x-5' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-      </div>
       
       <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* Show initial complexes notification */}
@@ -418,6 +387,11 @@ const WritingInterface = ({ purpose, content, onContentChange, feedback, setFeed
       <UnifiedAgentCustomizationPanel
         isOpen={showAgentCustomization}
         onClose={() => setShowAgentCustomization(false)}
+        initialTab="control" // Start with the control tab
+        multiAgentSystem={multiAgentAnalysis.system}
+        onAgentsUpdated={() => {
+          console.log('Agents updated - analysis will use new configuration on next run');
+        }}
       />
 
       {/* API Test Panel */}

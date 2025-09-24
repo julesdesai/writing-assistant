@@ -5,6 +5,7 @@
  */
 
 import { BaseAgent, MODEL_TIERS, CAPABILITIES } from './BaseAgent';
+import promptCustomizationService from '../services/promptCustomizationService';
 
 export class EvidenceQualityAgent extends BaseAgent {
   constructor() {
@@ -15,7 +16,8 @@ export class EvidenceQualityAgent extends BaseAgent {
       requiredCapabilities: [CAPABILITIES.EVIDENCE_RESEARCH, CAPABILITIES.WEB_SEARCH],
       escalationThreshold: 0.65, // Research agents need higher confidence
       maxRetries: 3,
-      contextLimits: { maxTokens: 3000 }
+      contextLimits: { maxTokens: 3000 },
+      debugPrompts: true // Enable prompt debugging to verify customizations
     });
     
     // Source credibility indicators
@@ -95,11 +97,22 @@ export class EvidenceQualityAgent extends BaseAgent {
   generatePrompt(context, modelConfig) {
     const { content, purpose, taskType } = context;
     
-    // Extract potential sources and claims
-    const sourcesFound = this.extractPotentialSources(content);
-    const claims = this.extractClaims(content);
-    
-    const analysisContext = this.buildAnalysisContext(sourcesFound, claims);
+    // Try to use customized prompt first
+    try {
+      return promptCustomizationService.generatePrompt(
+        'evidenceQuality',
+        content,
+        purpose,
+        'analysis',
+        this.generateAdditionalCriteria(content)
+      );
+    } catch (error) {
+      console.warn('[EvidenceQualityAgent] Failed to get customized prompt, using fallback:', error);
+      
+      // Fallback to default prompt
+      const sourcesFound = this.extractPotentialSources(content);
+      const claims = this.extractClaims(content);
+      const analysisContext = this.buildAnalysisContext(sourcesFound, claims);
     
     return `You are an evidence quality assessment specialist. Evaluate the credibility of sources, relevance of evidence, and overall strength of support for claims.
 
@@ -170,6 +183,25 @@ Focus on:
 - Flagging missing evidence for important claims
 
 If no sources or evidence found, return empty array [].`;
+    }
+  }
+  
+  /**
+   * Generate additional criteria based on content analysis
+   */
+  generateAdditionalCriteria(content) {
+    const sourcesFound = this.extractPotentialSources(content);
+    const claims = this.extractClaims(content);
+    
+    return {
+      sourcesFound: sourcesFound.length,
+      claimsFound: claims.length,
+      hasUrls: /https?:\/\//.test(content),
+      hasCitations: /\(\d{4}\)|\[\d+\]|et al\./.test(content),
+      hasStatistics: /\d+%|\d+\.\d+%|\d+ percent/.test(content),
+      contentLength: content.length,
+      analysisMode: 'evidence_quality'
+    };
   }
   
   /**

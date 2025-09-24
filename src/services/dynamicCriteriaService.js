@@ -10,12 +10,22 @@ class DynamicCriteriaService {
 
   /**
    * Generate writing criteria based on purpose
-   * @param {string} purpose - The writing purpose/goal
+   * @param {string|Object} purpose - The writing purpose/goal (string or {topic, context})
    * @returns {Promise<Object>} Generated criteria with categories
    */
   async generateCriteria(purpose) {
-    if (!purpose || purpose.length < 10) {
-      throw new Error('Purpose must be at least 10 characters long');
+    // Handle both old format (string) and new format (object)
+    let purposeText;
+    if (typeof purpose === 'object' && purpose !== null) {
+      if (!purpose.topic || purpose.topic.length < 5) {
+        throw new Error('Topic must be at least 5 characters long');
+      }
+      purposeText = `Topic: ${purpose.topic}${purpose.context ? `\nContext: ${purpose.context}` : ''}`;
+    } else {
+      if (!purpose || purpose.length < 10) {
+        throw new Error('Purpose must be at least 10 characters long');
+      }
+      purposeText = purpose;
     }
 
     // Check cache first
@@ -25,7 +35,7 @@ class DynamicCriteriaService {
     }
 
     try {
-      const prompt = this.createCriteriaPrompt(purpose);
+      const prompt = this.createCriteriaPrompt(purposeText);
       const response = await aiService.callAPI(prompt, undefined, {
         temperature: 0.4,
         maxTokens: 800
@@ -51,7 +61,8 @@ class DynamicCriteriaService {
   createCriteriaPrompt(purpose) {
     return `You are an expert writing coach. Based on the following writing purpose, generate specific, actionable quality criteria that would make this writing excellent.
 
-WRITING PURPOSE: "${purpose}"
+WRITING INFORMATION:
+${purpose}
 
 Generate criteria organized into these categories:
 1. **Content & Ideas** - What should the content achieve?
@@ -158,6 +169,10 @@ Priority levels: "high" (essential), "medium" (important), "low" (nice to have)`
    * @returns {string} Normalized purpose
    */
   normalizePurpose(purpose) {
+    if (typeof purpose === 'object' && purpose !== null) {
+      const text = `${purpose.topic || ''} ${purpose.context || ''}`.trim();
+      return text.toLowerCase().replace(/\s+/g, ' ');
+    }
     return purpose.toLowerCase().trim().replace(/\s+/g, ' ');
   }
 

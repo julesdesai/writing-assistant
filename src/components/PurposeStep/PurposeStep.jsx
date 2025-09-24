@@ -1,10 +1,20 @@
 import React from 'react';
 import { Target, Brain, Palette, Send, Loader2, Lightbulb } from 'lucide-react';
 
-const PurposeStep = ({ purpose, setPurpose, onSubmit, isGeneratingComplexes }) => {
+const PurposeStep = ({ purpose, setPurpose, onSubmit }) => {
+  // Handle both old format (string) and new format (object with topic/context)
+  const purposeData = typeof purpose === 'string' ? { topic: purpose, context: '' } : purpose;
+  
   const handleSubmit = () => {
-    if (!purpose.trim()) return;
-    onSubmit(purpose);
+    if (!purposeData.topic?.trim()) return;
+    onSubmit(purposeData);
+  };
+  
+  const updatePurpose = (field, value) => {
+    setPurpose(prev => {
+      const current = typeof prev === 'string' ? { topic: prev, context: '' } : prev;
+      return { ...current, [field]: value };
+    });
   };
 
   const handleKeyDown = (e) => {
@@ -23,72 +33,58 @@ const PurposeStep = ({ purpose, setPurpose, onSubmit, isGeneratingComplexes }) =
 
         <div className="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto">
           <div className="flex items-center gap-3 mb-6">
-            <Target className="text-green-600 w-6 h-6" />
+            <Target className="text-blue-600 w-6 h-6" />
             <h2 className="text-2xl font-semibold text-slate-800">Define Your Writing Purpose</h2>
           </div>
           
           <p className="text-slate-600 mb-6">
-            What are you trying to achieve with your writing? This will guide our AI critics in providing relevant feedback.
+            Define what you're writing about and who you're writing for. This will guide our AI critics in providing relevant feedback.
           </p>
 
-          <textarea
-            value={purpose}
-            onChange={(e) => setPurpose(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Example: I want to write a persuasive essay arguing for renewable energy adoption, targeting policymakers with evidence-based reasoning..."
-            className="w-full h-32 p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-          />
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Topic (What are you writing about?)
+              </label>
+              <textarea
+                value={purposeData.topic || ''}
+                onChange={(e) => updatePurpose('topic', e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Example: The benefits of renewable energy adoption and policy recommendations"
+                className="w-full h-24 p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              />
+            </div>
 
-          <div className="mt-6 p-4 bg-slate-50 rounded-lg">
-            <h3 className="font-medium text-slate-800 mb-2">Your AI Critics</h3>
-            <div className="space-y-2 text-sm text-slate-600">
-              <div className="flex items-center gap-2">
-                <Brain className="w-4 h-4 text-purple-600" />
-                <span><strong>Dialectical Critic:</strong> Challenges reasoning and intellectual rigor</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Palette className="w-4 h-4 text-blue-600" />
-                <span><strong>Style Guide:</strong> Suggests improvements to writing style and flow</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Target className="w-4 h-4 text-green-600" />
-                <span><strong>Inquiry Complex Integration:</strong> Connects your writing to deeper questions</span>
-              </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">
+                Context (Who are you writing for? What's the setting?)
+              </label>
+              <textarea
+                value={purposeData.context || ''}
+                onChange={(e) => updatePurpose('context', e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Example: Policymakers and government officials; formal policy brief requiring evidence-based reasoning"
+                className="w-full h-24 p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              />
             </div>
           </div>
+
 
           <div className="mt-6">
             <button
               onClick={handleSubmit}
-              disabled={!purpose.trim() || isGeneratingComplexes}
+              disabled={!purpose.trim()}
               className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
-              {isGeneratingComplexes ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating Inquiry Complexes...
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  Start Writing
-                </>
-              )}
+              <Send className="w-4 h-4" />
+              Start Writing
             </button>
           </div>
           
           <p className="text-sm text-slate-500 mt-2 text-center">
-            {isGeneratingComplexes 
-              ? 'AI is analyzing your purpose to create initial inquiry complexes...'
-              : 'Press Ctrl+Enter to submit'
-            }
+            Press Ctrl+Enter to submit
           </p>
           
-          {!isGeneratingComplexes && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
-              <p><strong>✨ New:</strong> When you start writing, we'll automatically generate inquiry complexes from your purpose to deepen your intellectual exploration.</p>
-            </div>
-          )}
         </div>
       </div>
     </div>

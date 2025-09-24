@@ -5,6 +5,7 @@
  */
 
 import { BaseAgent, MODEL_TIERS, CAPABILITIES } from './BaseAgent';
+import promptCustomizationService from '../services/promptCustomizationService';
 
 export class ContextualResearchCritic extends BaseAgent {
   constructor() {
@@ -15,14 +16,28 @@ export class ContextualResearchCritic extends BaseAgent {
       requiredCapabilities: [CAPABILITIES.WEB_SEARCH, CAPABILITIES.EVIDENCE_RESEARCH],
       escalationThreshold: 0.7,
       maxRetries: 3,
-      contextLimits: { maxTokens: 3500 }
+      contextLimits: { maxTokens: 3500 },
+      debugPrompts: true // Enable prompt debugging
     });
   }
   
   generatePrompt(context, modelConfig) {
     const { content, purpose } = context;
     
-    return `You are a contextual research specialist. Find counter-arguments, alternative perspectives, and expert opinions that challenge or complement the main arguments.
+    // Try to use customized prompt first
+    try {
+      return promptCustomizationService.generatePrompt(
+        'contextualResearch',
+        content,
+        purpose,
+        'analysis',
+        { contentLength: content.length, analysisMode: 'research_critic' }
+      );
+    } catch (error) {
+      console.warn('[ContextualResearchCritic] Failed to get customized prompt, using fallback:', error);
+      
+      // Fallback to default prompt
+      const fallbackPrompt = `You are a contextual research specialist. Find counter-arguments, alternative perspectives, and expert opinions that challenge or complement the main arguments.
 
 TEXT TO ANALYZE:
 ${content}
@@ -56,6 +71,11 @@ Respond with ONLY valid JSON:
     "researchDepth": "preliminary|thorough|comprehensive"
   }
 ]`;
+      
+      console.log('[ContextualResearchCritic] *** RETURNING FALLBACK PROMPT ***');
+      console.log('Fallback prompt length:', fallbackPrompt.length);
+      return fallbackPrompt;
+    }
   }
   
   parseResult(result, context) {

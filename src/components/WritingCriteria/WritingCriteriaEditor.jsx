@@ -153,7 +153,7 @@ const WritingCriteriaEditor = ({ purpose, onCriteriaChange, initialCriteria = nu
       <div className="bg-white rounded-xl shadow-lg p-6">
         <div className="flex items-center justify-center py-8">
           <Loader className="w-6 h-6 animate-spin text-blue-600 mr-3" />
-          <span className="text-gray-600">Generating quality criteria for your writing purpose...</span>
+          <span className="text-gray-600">Thinking about your writing...</span>
         </div>
       </div>
     );

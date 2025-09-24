@@ -1,6 +1,6 @@
 /**
- * Unified Agent Customization Panel - Simplified
- * Single interface for managing user agents and templates
+ * Simplified Agent Management Panel
+ * Create and edit agents with simple prompt editing
  */
 
 import React, { useState, useEffect } from 'react';
@@ -8,22 +8,15 @@ import {
   Plus, Save, Trash2, Copy, Power, Settings, 
   Zap, Brain, Search, Target, FileText, Users,
   ChevronDown, ChevronUp, AlertCircle, CheckCircle,
-  Layout, Edit3, X, Download, Upload
+  Template, Edit3
 } from 'lucide-react';
 import userAgentService, { AGENT_TEMPLATES } from '../../services/userAgentService';
 
-export const UnifiedAgentCustomizationPanel = ({ 
-  isOpen, 
-  onClose,
-  initialTab = 'agents',
-  embedded = false,
-  multiAgentSystem,
-  onAgentsUpdated
-}) => {
+const SimplifiedAgentPanel = ({ isOpen, onClose, embedded = false }) => {
+  const [activeTab, setActiveTab] = useState('my-agents');
   const [agents, setAgents] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
-  const [showTemplates, setShowTemplates] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({});
   const [loading, setLoading] = useState(false);
@@ -85,14 +78,33 @@ export const UnifiedAgentCustomizationPanel = ({
         defaultTier: 'fast',
         capabilities: [],
         responseFormat: 'general_analysis',
-        prompt: `You are an AI analysis assistant. Analyze the text and provide insights about its effectiveness, clarity, or other relevant aspects.`,
+        prompt: `You are an AI analysis assistant. Analyze the following text and provide insights.
+
+TEXT TO ANALYZE:
+{CONTENT}
+
+PURPOSE: {PURPOSE}
+
+Please analyze the text and provide your insights in JSON format:
+[
+  {
+    "type": "your_analysis_type",
+    "title": "Brief title of your insight",
+    "feedback": "Detailed explanation of your finding",
+    "suggestion": "Actionable recommendation",
+    "confidence": 0.85,
+    "severity": "high|medium|low",
+    "textSnippets": ["relevant text from the original"]
+  }
+]
+
+If no significant issues or insights found, return empty array [].`,
         enabled: true
       });
     }
     
     setIsEditing(true);
     setSelectedAgent(null);
-    setShowTemplates(false);
   };
 
   const handleSaveAgent = async () => {
@@ -114,11 +126,6 @@ export const UnifiedAgentCustomizationPanel = ({
       setIsEditing(false);
       await loadData();
       
-      // Notify parent about agent changes
-      if (onAgentsUpdated) {
-        onAgentsUpdated();
-      }
-      
     } catch (err) {
       console.error('Failed to save agent:', err);
       setError('Failed to save agent: ' + err.message);
@@ -128,49 +135,11 @@ export const UnifiedAgentCustomizationPanel = ({
   };
 
   const handleDeleteAgent = async (agentId) => {
-    // Create custom confirmation dialog to bypass blocked browser popups
-    const confirmed = await new Promise((resolve) => {
-      const dialog = document.createElement('div');
-      dialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-      dialog.innerHTML = `
-        <div class="bg-white rounded-lg p-6 max-w-sm mx-4">
-          <h3 class="text-lg font-semibold mb-4">Delete Agent</h3>
-          <p class="text-gray-600 mb-6">Are you sure you want to delete this agent? This action cannot be undone.</p>
-          <div class="flex justify-end gap-3">
-            <button id="cancel-delete" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
-            <button id="confirm-delete" class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Delete</button>
-          </div>
-        </div>
-      `;
-      
-      document.body.appendChild(dialog);
-      
-      dialog.querySelector('#cancel-delete').onclick = () => {
-        document.body.removeChild(dialog);
-        resolve(false);
-      };
-      
-      dialog.querySelector('#confirm-delete').onclick = () => {
-        document.body.removeChild(dialog);
-        resolve(true);
-      };
-      
-      // Close on background click
-      dialog.onclick = (e) => {
-        if (e.target === dialog) {
-          document.body.removeChild(dialog);
-          resolve(false);
-        }
-      };
-    });
-    
-    if (!confirmed) return;
+    if (!confirm('Are you sure you want to delete this agent?')) return;
     
     try {
       setLoading(true);
-      console.log('[UnifiedAgentPanel] Deleting agent:', agentId);
-      const result = await userAgentService.deleteAgent(agentId);
-      console.log('[UnifiedAgentPanel] Delete result:', result);
+      await userAgentService.deleteAgent(agentId);
       
       if (selectedAgent && selectedAgent.id === agentId) {
         setSelectedAgent(null);
@@ -178,10 +147,6 @@ export const UnifiedAgentCustomizationPanel = ({
       
       await loadData();
       setSuccess('Agent deleted successfully');
-      
-      if (onAgentsUpdated) {
-        onAgentsUpdated();
-      }
       
     } catch (err) {
       console.error('Failed to delete agent:', err);
@@ -201,10 +166,6 @@ export const UnifiedAgentCustomizationPanel = ({
         setSelectedAgent({ ...selectedAgent, enabled });
       }
       
-      if (onAgentsUpdated) {
-        onAgentsUpdated();
-      }
-      
     } catch (err) {
       console.error('Failed to toggle agent:', err);
       setError('Failed to toggle agent');
@@ -217,107 +178,10 @@ export const UnifiedAgentCustomizationPanel = ({
       setSelectedAgent(clonedAgent);
       await loadData();
       setSuccess('Agent cloned successfully');
-      
-      if (onAgentsUpdated) {
-        onAgentsUpdated();
-      }
     } catch (err) {
       console.error('Failed to clone agent:', err);
       setError('Failed to clone agent');
     }
-  };
-
-  const handleExportAgent = async (agentId) => {
-    try {
-      const exportData = userAgentService.exportAgent(agentId);
-      const agent = agents.find(a => a.id === agentId);
-      
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json'
-      });
-      
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${agent?.name?.replace(/[^a-z0-9]/gi, '_') || 'agent'}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      setSuccess('Agent exported successfully');
-    } catch (err) {
-      console.error('Failed to export agent:', err);
-      setError('Failed to export agent');
-    }
-  };
-
-  const handleExportAllAgents = async () => {
-    try {
-      const exportData = userAgentService.exportAllAgents();
-      
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-        type: 'application/json'
-      });
-      
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `all-agents-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      setSuccess(`Exported ${exportData.totalAgents} agents successfully`);
-    } catch (err) {
-      console.error('Failed to export all agents:', err);
-      setError('Failed to export agents');
-    }
-  };
-
-  const handleImportAgent = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-    
-    try {
-      const text = await file.text();
-      const config = JSON.parse(text);
-      
-      // Check if it's a bulk export (multiple agents) or single agent
-      if (config.agents && Array.isArray(config.agents)) {
-        // Bulk import
-        const results = await userAgentService.importMultipleAgents(config);
-        await loadData();
-        
-        let message = `Imported ${results.imported.length} agent(s) successfully`;
-        if (results.errors.length > 0) {
-          message += `. ${results.errors.length} failed: ${results.errors.map(e => e.agentName).join(', ')}`;
-        }
-        setSuccess(message);
-        
-        // Select first imported agent
-        if (results.imported.length > 0) {
-          setSelectedAgent(results.imported[0]);
-        }
-      } else {
-        // Single agent import
-        const importedAgent = await userAgentService.importAgent(config);
-        setSelectedAgent(importedAgent);
-        await loadData();
-        setSuccess(`Agent "${importedAgent.name}" imported successfully`);
-      }
-      
-      if (onAgentsUpdated) {
-        onAgentsUpdated();
-      }
-    } catch (err) {
-      console.error('Failed to import agent(s):', err);
-      setError(err.message || 'Failed to import agent(s). Please check the file format.');
-    }
-    
-    // Reset file input
-    event.target.value = '';
   };
 
   const handleEditAgent = (agent) => {
@@ -334,7 +198,6 @@ export const UnifiedAgentCustomizationPanel = ({
       enabled: agent.enabled
     });
     setIsEditing(true);
-    setShowTemplates(false);
   };
 
   const getCategoryIcon = (category) => {
@@ -350,9 +213,9 @@ export const UnifiedAgentCustomizationPanel = ({
 
   const getTierBadgeColor = (tier) => {
     const colors = {
-      fast: 'bg-gray-100 text-gray-700',
-      standard: 'bg-gray-100 text-gray-700', 
-      premium: 'bg-gray-100 text-gray-700'
+      fast: 'bg-green-100 text-green-700',
+      standard: 'bg-blue-100 text-blue-700',
+      premium: 'bg-purple-100 text-purple-700'
     };
     return colors[tier] || 'bg-gray-100 text-gray-700';
   };
@@ -384,7 +247,9 @@ export const UnifiedAgentCustomizationPanel = ({
               onClick={onClose}
               className="text-gray-400 hover:text-gray-600 transition-colors"
             >
-              <X className="w-6 h-6" />
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
           )}
         </div>
@@ -408,196 +273,174 @@ export const UnifiedAgentCustomizationPanel = ({
         </div>
       )}
 
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <div className="flex px-6">
+          <button
+            onClick={() => setActiveTab('my-agents')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'my-agents'
+                ? 'border-blue-500 text-blue-600 bg-blue-50'
+                : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            My Agents ({agents.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('templates')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'templates'
+                ? 'border-blue-500 text-blue-600 bg-blue-50'
+                : 'border-transparent text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+            }`}
+          >
+            <Template className="w-4 h-4" />
+            Templates ({templates.length})
+          </button>
+        </div>
+      </div>
+
       {/* Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel - Agent List */}
+        {/* Left Panel */}
         <div className="w-1/3 border-r border-gray-200 flex flex-col">
-          {/* Action Buttons */}
-          <div className="p-4 border-b border-gray-200 space-y-2">
+          {/* Create Button */}
+          <div className="p-4 border-b border-gray-200">
             <button
               onClick={() => handleCreateAgent()}
               className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
             >
               <Plus className="w-4 h-4" />
-              Create New Agent
-            </button>
-            <button
-              onClick={() => setShowTemplates(!showTemplates)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
-            >
-              <Layout className="w-4 h-4" />
-              {showTemplates ? 'Hide Templates' : 'Use Template'}
-            </button>
-            <div className="relative">
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImportAgent}
-                className="hidden"
-                id="import-agent-input"
-              />
-              <button
-                onClick={() => document.getElementById('import-agent-input').click()}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
-              >
-                <Upload className="w-4 h-4" />
-                Import Agents
-              </button>
-            </div>
-            <button
-              onClick={handleExportAllAgents}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
-              disabled={agents.length === 0}
-            >
-              <Download className="w-4 h-4" />
-              Export All ({agents.length})
+              Create Agent
             </button>
           </div>
 
-          {/* Templates Section */}
-          {showTemplates && (
-            <div className="border-b border-gray-200">
-              <div className="p-3 bg-green-50">
-                <h3 className="font-medium text-green-900 text-sm">Available Templates</h3>
-                <p className="text-xs text-green-700 mt-1">Click to create agent from template</p>
-              </div>
-              <div className="max-h-48 overflow-y-auto">
-                {templates.map(template => (
-                  <div
-                    key={template.id}
-                    className="p-3 cursor-pointer hover:bg-green-50 border-b border-green-100"
-                    onClick={() => handleCreateAgent(template.id)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-lg">{template.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-gray-900 text-sm truncate">{template.name}</h4>
-                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{template.description}</p>
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium mt-1 ${getTierBadgeColor(template.defaultTier)}`}>
-                          {template.defaultTier}
-                        </span>
-                      </div>
-                      <Plus className="w-4 h-4 text-green-600" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* User Agents List */}
+          {/* Agent/Template List */}
           <div className="flex-1 overflow-y-auto">
-            <div className="p-3 bg-blue-50 border-b border-blue-100">
-              <h3 className="font-medium text-blue-900 text-sm">My Agents ({agents.length})</h3>
-            </div>
-            
-            {agents.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <Settings className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No agents created yet</p>
-                <p className="text-xs">Create your first agent</p>
-              </div>
-            ) : (
+            {activeTab === 'my-agents' ? (
               <div className="divide-y divide-gray-200">
-                {agents.map(agent => (
-                  <div
-                    key={agent.id}
-                    className={`p-4 cursor-pointer hover:bg-gray-50 ${
-                      selectedAgent?.id === agent.id ? 'bg-blue-50 border-r-2 border-blue-500' : ''
-                    }`}
-                    onClick={() => {
-                      setSelectedAgent(agent);
-                      setShowTemplates(false);
-                      setIsEditing(false);
-                    }}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{agent.icon}</span>
-                          <h4 className="font-medium text-gray-900 text-sm">{agent.name}</h4>
+                {agents.map(agent => {
+                  const CategoryIcon = getCategoryIcon(agent.category);
+                  return (
+                    <div
+                      key={agent.id}
+                      className={`p-4 cursor-pointer hover:bg-gray-50 ${
+                        selectedAgent?.id === agent.id ? 'bg-blue-50 border-r-2 border-blue-500' : ''
+                      }`}
+                      onClick={() => setSelectedAgent(agent)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{agent.icon}</span>
+                            <h4 className="font-medium text-gray-900">{agent.name}</h4>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleAgent(agent.id, !agent.enabled);
+                              }}
+                              className={`flex items-center justify-center w-5 h-5 rounded-full transition-colors ${
+                                agent.enabled
+                                  ? 'bg-green-500 hover:bg-green-600 text-white'
+                                  : 'bg-gray-300 hover:bg-gray-400 text-gray-600'
+                              }`}
+                              title={agent.enabled ? 'Disable agent' : 'Enable agent'}
+                            >
+                              <Power className="w-3 h-3" />
+                            </button>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{agent.description}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getTierBadgeColor(agent.defaultTier)}`}>
+                              {agent.defaultTier}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              agent.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                            }`}>
+                              {agent.enabled ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-col gap-1 ml-2">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleToggleAgent(agent.id, !agent.enabled);
+                              handleEditAgent(agent);
                             }}
-                            className={`flex items-center justify-center w-5 h-5 rounded-full transition-colors ${
-                              agent.enabled
-                                ? 'bg-green-500 hover:bg-green-600 text-white'
-                                : 'bg-gray-300 hover:bg-gray-400 text-gray-600'
-                            }`}
-                            title={agent.enabled ? 'Disable agent' : 'Enable agent'}
+                            className="p-1 text-gray-400 hover:text-blue-600 text-sm"
+                            title="Edit"
                           >
-                            <Power className="w-3 h-3" />
+                            <Edit3 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCloneAgent(agent.id);
+                            }}
+                            className="p-1 text-gray-400 hover:text-gray-600 text-sm"
+                            title="Clone"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteAgent(agent.id);
+                            }}
+                            className="p-1 text-gray-400 hover:text-red-600 text-sm"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
-                        <p className="text-xs text-gray-600 mt-1 line-clamp-2">{agent.description}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getTierBadgeColor(agent.defaultTier)}`}>
-                            {agent.defaultTier}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            agent.enabled ? 'bg-gray-100 text-gray-700' : 'bg-gray-200 text-gray-600'
-                          }`}>
-                            {agent.enabled ? 'Active' : 'Inactive'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {agent.usageCount || 0} uses
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-col gap-1 ml-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleEditAgent(agent);
-                          }}
-                          className="p-1 text-gray-400 hover:text-blue-600 text-sm"
-                          title="Edit"
-                        >
-                          <Edit3 className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCloneAgent(agent.id);
-                          }}
-                          className="p-1 text-gray-400 hover:text-gray-600 text-sm"
-                          title="Clone"
-                        >
-                          <Copy className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleExportAgent(agent.id);
-                          }}
-                          className="p-1 text-gray-400 hover:text-blue-600 text-sm"
-                          title="Export Agent"
-                        >
-                          <Download className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteAgent(agent.id);
-                          }}
-                          className="p-1 text-gray-400 hover:text-red-600 text-sm"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
                       </div>
                     </div>
+                  );
+                })}
+                
+                {agents.length === 0 && (
+                  <div className="p-8 text-center text-gray-500">
+                    <Template className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>No agents created yet</p>
+                    <p className="text-xs">Create your first agent or use a template</p>
                   </div>
-                ))}
+                )}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {templates.map(template => {
+                  const CategoryIcon = getCategoryIcon(template.category);
+                  return (
+                    <div
+                      key={template.id}
+                      className="p-4 cursor-pointer hover:bg-gray-50"
+                      onClick={() => handleCreateAgent(template.id)}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-lg">{template.icon}</span>
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900">{template.name}</h4>
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{template.description}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getTierBadgeColor(template.defaultTier)}`}>
+                              {template.defaultTier}
+                            </span>
+                            <span className="text-xs text-gray-500 capitalize">{template.category}</span>
+                          </div>
+                        </div>
+                        <Plus className="w-4 h-4 text-gray-400" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Panel - Agent Editor/Details */}
+        {/* Right Panel - Agent Editor */}
         <div className="flex-1 flex flex-col">
           {isEditing ? (
             <>
@@ -693,23 +536,24 @@ export const UnifiedAgentCustomizationPanel = ({
                     </div>
                   </div>
 
-                  {/* Prompt Editor - The Main Feature */}
+                  {/* Prompt Editor */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Agent Prompt
                       <span className="text-xs text-gray-500 ml-2">
-                        <br></br>• Give your agent clear instructions on how to support your writing. Try to give the agent a singular and well-defined set of instructions. 
-                        <br></br>• Your agent will automatically be aware of your current writing sample and your writing aims. 
-                        <br></br>• We will automatically format and parse your feedback.
+                        Use {'{CONTENT}'} for text to analyze and {'{PURPOSE}'} for the analysis purpose
                       </span>
                     </label>
                     <textarea
                       value={editForm.prompt || ''}
                       onChange={(e) => setEditForm({...editForm, prompt: e.target.value})}
-                      rows={25}
+                      rows={20}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
                       placeholder="Enter your agent prompt here..."
                     />
+                    <p className="text-xs text-gray-500 mt-2">
+                      Make sure your prompt requests JSON output format for proper parsing.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -730,7 +574,7 @@ export const UnifiedAgentCustomizationPanel = ({
                         {selectedAgent.defaultTier}
                       </span>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        selectedAgent.enabled ? 'bg-gray-100 text-gray-700' : 'bg-gray-200 text-gray-600'
+                        selectedAgent.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                       }`}>
                         {selectedAgent.enabled ? 'Active' : 'Inactive'}
                       </span>
@@ -754,7 +598,7 @@ export const UnifiedAgentCustomizationPanel = ({
                 <div className="space-y-4">
                   <div>
                     <h4 className="font-medium text-gray-900 mb-2">Current Prompt</h4>
-                    <pre className="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                    <pre className="bg-gray-50 p-4 rounded-lg text-sm overflow-x-auto whitespace-pre-wrap">
                       {selectedAgent.prompt}
                     </pre>
                   </div>
@@ -797,25 +641,18 @@ export const UnifiedAgentCustomizationPanel = ({
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Agent Management</h3>
                 <p className="text-gray-600 mb-6">
-                  Create agents from scratch or use our templates to get started quickly.
-                  Each agent can be customized with its own prompt and settings.
+                  {activeTab === 'my-agents' 
+                    ? 'Select an agent to view details or create a new one'
+                    : 'Choose a template to create a new agent'
+                  }
                 </p>
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => handleCreateAgent()}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Create New Agent
-                  </button>
-                  <button
-                    onClick={() => setShowTemplates(!showTemplates)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium"
-                  >
-                    <Layout className="w-4 h-4" />
-                    Browse Templates
-                  </button>
-                </div>
+                <button
+                  onClick={() => handleCreateAgent()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  <Plus className="w-4 h-4" />
+                  Create New Agent
+                </button>
               </div>
             </div>
           )}
@@ -837,4 +674,4 @@ export const UnifiedAgentCustomizationPanel = ({
   ) : null;
 };
 
-export default UnifiedAgentCustomizationPanel;
+export default SimplifiedAgentPanel;

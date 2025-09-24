@@ -440,18 +440,35 @@ class PromptCustomizationService {
     const promptConfig = this.customPrompts[promptId];
     let basePrompt = baseGenerator(content, purpose, mode, additionalCriteria);
 
+    console.log(`[PromptCustomization] *** APPLYING CUSTOMIZATIONS FOR ${promptId} ***`);
+    console.log('Base prompt length:', basePrompt.length);
+    console.log('Custom elements:', promptConfig.customElements);
+
     // Apply each customization
     Object.entries(promptConfig.customElements).forEach(([elementKey, customValue]) => {
       const defaultConfig = promptConfig.customizableElements[elementKey];
       if (defaultConfig && customValue.trim() !== '') {
+        const searchText = defaultConfig.default;
+        console.log(`[PromptCustomization] Trying to replace "${searchText}" with "${customValue}"`);
+        
         // Replace the default value with the custom value
+        const originalPrompt = basePrompt;
         basePrompt = basePrompt.replace(
           new RegExp(this.escapeRegExp(defaultConfig.default), 'gi'),
           customValue
         );
+        
+        if (originalPrompt === basePrompt) {
+          console.log(`[PromptCustomization] *** REPLACEMENT FAILED - TEXT NOT FOUND ***`);
+          console.log('Searched for:', searchText);
+          console.log('In prompt starting with:', basePrompt.substring(0, 200) + '...');
+        } else {
+          console.log(`[PromptCustomization] ✅ Successfully replaced text`);
+        }
       }
     });
 
+    console.log(`[PromptCustomization] Final customized prompt length:`, basePrompt.length);
     return basePrompt;
   }
 

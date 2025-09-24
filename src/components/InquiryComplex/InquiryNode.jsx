@@ -203,7 +203,7 @@ const InquiryNode = ({
       {node.isExpanding && (
         <div className="ml-6 p-2 flex items-center gap-2 text-gray-500 text-sm">
           <Brain className="w-4 h-4 animate-pulse" />
-          <span>Generating intellectual content...</span>
+          <span>Thinking...</span>
         </div>
       )}
     </div>

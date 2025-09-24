@@ -35,7 +35,8 @@ export class ProgressiveEnhancementManager extends AgentOrchestrator {
       onComplete = null,
       urgency = URGENCY_LEVELS.NORMAL,
       budget = 'standard',
-      maxParallelAgents = 3
+      maxParallelAgents = 3,
+      requestedAgents = null
     } = options;
     
     // Initialize analysis state
@@ -65,14 +66,16 @@ export class ProgressiveEnhancementManager extends AgentOrchestrator {
       const fastPhasePromise = this.executeFastPhase(analysisId, content, {
         urgency,
         budget,
-        maxParallelAgents: Math.min(maxParallelAgents, 3) // Limit fast agents
+        maxParallelAgents: Math.min(maxParallelAgents, 3), // Limit fast agents
+        requestedAgents
       });
       
       // Phase 2: Research agents (background execution)
       const researchPhasePromise = this.executeResearchPhase(analysisId, content, {
         urgency: urgency === URGENCY_LEVELS.REALTIME ? URGENCY_LEVELS.HIGH : urgency,
         budget,
-        maxParallelAgents: Math.min(maxParallelAgents, 2) // Limit research agents
+        maxParallelAgents: Math.min(maxParallelAgents, 2), // Limit research agents
+        requestedAgents
       });
       
       // Wait for fast phase and notify
@@ -285,10 +288,24 @@ export class ProgressiveEnhancementManager extends AgentOrchestrator {
   selectFastAgents(content, options) {
     const availableAgents = Array.from(this.agents.entries());
     
-    return availableAgents
-      .filter(([id, agent]) => agent.defaultTier === 'fast')
+    let filteredAgents = availableAgents
+      .filter(([id, agent]) => agent.defaultTier === 'fast');
+    
+    console.log('Fast agents before filtering by requestedAgents:', filteredAgents.map(([id]) => id));
+    console.log('requestedAgents:', options.requestedAgents);
+    
+    // If specific agents requested, filter to only those
+    if (options.requestedAgents && options.requestedAgents.length > 0) {
+      filteredAgents = filteredAgents
+        .filter(([id, agent]) => options.requestedAgents.includes(id));
+    }
+    
+    const selectedAgents = filteredAgents
       .map(([id, agent]) => ({ id, agent }))
       .slice(0, options.maxParallelAgents || 3);
+    
+    console.log('Selected fast agents:', selectedAgents.map(a => a.id));
+    return selectedAgents;
   }
   
   /**
@@ -297,8 +314,16 @@ export class ProgressiveEnhancementManager extends AgentOrchestrator {
   selectResearchAgents(content, options) {
     const availableAgents = Array.from(this.agents.entries());
     
-    return availableAgents
-      .filter(([id, agent]) => agent.defaultTier !== 'fast')
+    let filteredAgents = availableAgents
+      .filter(([id, agent]) => agent.defaultTier !== 'fast');
+    
+    // If specific agents requested, filter to only those
+    if (options.requestedAgents && options.requestedAgents.length > 0) {
+      filteredAgents = filteredAgents
+        .filter(([id, agent]) => options.requestedAgents.includes(id));
+    }
+    
+    return filteredAgents
       .map(([id, agent]) => ({ id, agent }))
       .slice(0, options.maxParallelAgents || 2);
   }

@@ -33,7 +33,7 @@ const FeedbackPanel = ({
               <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></div>
             </div>
             <div className="flex items-center gap-1">
-              <span className="text-blue-600 font-medium">Streaming feedback</span>
+              <span className="text-blue-600 font-medium">Thinking...</span>
               <div className="flex gap-1">
                 <span 
                   className="text-blue-600"

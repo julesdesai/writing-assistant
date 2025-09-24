@@ -8,9 +8,7 @@ import {
   Trash2, 
   Copy,
   ArrowRight,
-  Filter,
-  Grid,
-  List
+  Filter
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import projectService from '../../services/projectService';
@@ -20,7 +18,7 @@ const ProjectDashboard = ({ onSelectProject, onCreateProject }) => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
+  const [viewMode, setViewMode] = useState('list'); // 'grid' or 'list'
   const [sortBy, setSortBy] = useState('lastAccessed'); // 'lastAccessed', 'created', 'title'
 
   useEffect(() => {
@@ -94,10 +92,33 @@ const ProjectDashboard = ({ onSelectProject, onCreateProject }) => {
     return date.toLocaleDateString();
   };
 
+  const formatPurpose = (purpose) => {
+    if (!purpose) return 'No purpose defined';
+    
+    if (typeof purpose === 'object' && purpose !== null) {
+      const parts = [];
+      if (purpose.topic) parts.push(purpose.topic);
+      if (purpose.context) parts.push(`(${purpose.context})`);
+      return parts.join(' ') || 'No purpose defined';
+    }
+    
+    return purpose;
+  };
+
+  const getPurposeSearchText = (purpose) => {
+    if (!purpose) return '';
+    
+    if (typeof purpose === 'object' && purpose !== null) {
+      return `${purpose.topic || ''} ${purpose.context || ''}`.toLowerCase();
+    }
+    
+    return purpose.toLowerCase();
+  };
+
   const filteredAndSortedProjects = projects
     .filter(project => 
       project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.purpose.toLowerCase().includes(searchTerm.toLowerCase())
+      getPurposeSearchText(project.purpose).includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
       switch (sortBy) {
@@ -166,20 +187,6 @@ const ProjectDashboard = ({ onSelectProject, onCreateProject }) => {
             <option value="title">Title</option>
           </select>
 
-          <div className="flex items-center border border-gray-300 rounded-lg">
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 ${viewMode === 'grid' ? 'bg-blue-100 text-blue-600' : 'text-gray-600'}`}
-            >
-              <Grid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 ${viewMode === 'list' ? 'bg-blue-100 text-blue-600' : 'text-gray-600'}`}
-            >
-              <List className="w-4 h-4" />
-            </button>
-          </div>
         </div>
       </div>
 
@@ -206,99 +213,76 @@ const ProjectDashboard = ({ onSelectProject, onCreateProject }) => {
           )}
         </div>
       ) : (
-        <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}>
-          {filteredAndSortedProjects.map((project) => (
-            <div
-              key={project.id}
-              onClick={() => onSelectProject(project)}
-              className={`bg-white border border-gray-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer group ${
-                viewMode === 'list' ? 'flex items-center p-4' : 'p-6'
-              }`}
-            >
-              {viewMode === 'grid' ? (
-                <>
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
-                        {project.title}
-                      </h3>
-                      <p className="text-sm text-gray-600 line-clamp-2">
-                        {project.purpose || 'No purpose defined'}
-                      </p>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Project
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Purpose
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Last Modified
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Content
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredAndSortedProjects.map((project) => (
+                <tr
+                  key={project.id}
+                  onClick={() => onSelectProject(project)}
+                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                >
+                  <td className="px-6 py-4">
+                    <div className="font-medium text-gray-900 hover:text-blue-600 transition-colors">
+                      {project.title}
                     </div>
-                    <ArrowRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  </div>
-
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center text-xs text-gray-500">
-                      <Clock className="w-3 h-3 mr-1" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-600 max-w-md truncate">
+                      {formatPurpose(project.purpose) || 'No purpose defined'}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-500">
                       {formatDate(project.lastAccessedAt)}
                     </div>
-                    <div className="flex items-center text-xs text-gray-500">
-                      <Edit3 className="w-3 h-3 mr-1" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-500">
                       {project.content?.length || 0} characters
                     </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={(e) => handleDuplicateProject(project.id, e)}
                         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
                         title="Duplicate project"
                       >
-                        <Copy className="w-3 h-3" />
+                        <Copy className="w-4 h-4" />
                       </button>
                       <button
                         onClick={(e) => handleDeleteProject(project.id, e)}
                         className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                         title="Delete project"
                       >
-                        <Trash2 className="w-3 h-3" />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                    <span className="text-xs text-gray-500">
-                      {project.inquiryComplexes?.length || 0} complexes
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors">
-                      {project.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mb-2">
-                      {project.purpose || 'No purpose defined'}
-                    </p>
-                    <div className="flex items-center gap-4 text-xs text-gray-500">
-                      <span>{formatDate(project.lastAccessedAt)}</span>
-                      <span>{project.content?.length || 0} characters</span>
-                      <span>{project.inquiryComplexes?.length || 0} complexes</span>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 ml-4">
-                    <button
-                      onClick={(e) => handleDuplicateProject(project.id, e)}
-                      className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                      title="Duplicate project"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteProject(project.id, e)}
-                      className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                      title="Delete project"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    <ArrowRight className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity ml-2" />
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

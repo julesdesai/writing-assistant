@@ -1,26 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Pen, Target, Home, User, LogOut } from 'lucide-react';
+import { Pen, Target, Home, User, LogOut, Bot } from 'lucide-react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import AuthModal from './components/Auth/AuthModal';
 import ProjectDashboard from './components/Projects/ProjectDashboard';
 import PurposeWithCriteriaStep from './components/PurposeStep/PurposeWithCriteriaStep';
 import WritingInterface from './components/WritingInterface';
 import InquiryComplexManager from './components/InquiryComplex/InquiryComplexManager';
+import AgentInterface from './components/AgentInterface/AgentInterface';
 import { extractInitialComplexes } from './agents/inquiryIntegrationAgent';
 import inquiryComplexService from './services/inquiryComplexService';
 import projectService from './services/projectService';
 
 function AppContent() {
   const { currentUser, logout } = useAuth();
-  const [currentMode, setCurrentMode] = useState('dashboard'); // 'dashboard' | 'home' | 'writing' | 'inquiry'
+  const [currentMode, setCurrentMode] = useState('dashboard'); // 'dashboard' | 'home' | 'writing' | 'inquiry' | 'agents'
   const [currentProject, setCurrentProject] = useState(null);
   const [purpose, setPurpose] = useState('');
   const [content, setContent] = useState(''); // Lift content state to App level
   const [feedback, setFeedback] = useState([]); // Lift feedback state to App level
   const [writingCriteria, setWritingCriteria] = useState(null); // Store writing criteria
-  const [isGeneratingComplexes, setIsGeneratingComplexes] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState('login');
+  const [isMonitoring, setIsMonitoring] = useState(true); // Global monitoring state for agents
 
   // Auto-save project content and feedback
   useEffect(() => {
@@ -134,11 +135,19 @@ function AppContent() {
     setPurpose(purposeText);
     setWritingCriteria(criteria);
     
+    // Generate title from purpose (handle both string and object formats)
+    let projectTitle = 'Untitled Project';
+    if (typeof purposeText === 'object' && purposeText !== null) {
+      projectTitle = purposeText.topic?.substring(0, 50) || 'Untitled Project';
+    } else if (typeof purposeText === 'string') {
+      projectTitle = purposeText.split('.')[0].substring(0, 50) || 'Untitled Project';
+    }
+    
     // Update current project with purpose and criteria
     if (currentProject) {
       await projectService.updateProject(currentProject.id, {
         purpose: purposeText,
-        title: purposeText.split('.')[0].substring(0, 50) || 'Untitled Project'
+        title: projectTitle
       });
       
       // Save writing criteria separately if provided
@@ -147,37 +156,6 @@ function AppContent() {
       }
     }
     
-    // Generate initial inquiry complexes from the purpose
-    setIsGeneratingComplexes(true);
-    try {
-      const complexSuggestions = await extractInitialComplexes(purposeText);
-      
-      // Create the suggested complexes
-      const createdComplexes = [];
-      for (const suggestion of complexSuggestions) {
-        try {
-          const complex = await inquiryComplexService.createComplex(suggestion.question);
-          createdComplexes.push(complex);
-          console.log(`Created initial complex: "${suggestion.question}"`);
-        } catch (error) {
-          console.warn(`Failed to create complex for "${suggestion.question}":`, error);
-        }
-      }
-      
-      // Save complexes to project
-      if (currentProject && createdComplexes.length > 0) {
-        const serializedComplexes = createdComplexes.map(c => inquiryComplexService.serializeComplex(c));
-        await projectService.updateInquiryComplexes(currentProject.id, serializedComplexes);
-      }
-      
-      if (complexSuggestions.length > 0) {
-        console.log(`Generated ${complexSuggestions.length} initial inquiry complexes from purpose`);
-      }
-    } catch (error) {
-      console.error('Failed to generate initial complexes:', error);
-    } finally {
-      setIsGeneratingComplexes(false);
-    }
     
     setCurrentMode('writing');
   };
@@ -193,7 +171,9 @@ function AppContent() {
         content,
         purpose,
         feedback, // Save current feedback
-        title: purpose.split('.')[0].substring(0, 50) || currentProject.title
+        title: typeof purpose === 'object' && purpose !== null 
+          ? (purpose.topic?.substring(0, 50) || currentProject.title)
+          : (purpose?.split('.')[0].substring(0, 50) || currentProject.title)
       }).catch(error => console.error('Failed to save project:', error));
     }
     
@@ -310,6 +290,16 @@ function AppContent() {
                 <Target className="w-4 h-4" />
                 <span>Inquiry Complex</span>
               </button>
+              
+              <button
+                onClick={() => setCurrentMode('agents')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                  currentMode === 'agents' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                <Bot className="w-4 h-4" />
+                <span>Agents</span>
+              </button>
             </>
           )}
           
@@ -347,7 +337,6 @@ function AppContent() {
             purpose={purpose}
             setPurpose={setPurpose}
             onSubmit={handlePurposeSubmit}
-            isGeneratingComplexes={isGeneratingComplexes}
           />
         ) : currentMode === 'writing' ? (
           <WritingInterface 
@@ -359,6 +348,17 @@ function AppContent() {
             onBackToPurpose={handleBackToHome}
             project={currentProject}
             writingCriteria={writingCriteria}
+            isMonitoring={isMonitoring}
+            onToggleMonitoring={() => setIsMonitoring(!isMonitoring)}
+          />
+        ) : currentMode === 'agents' ? (
+          <AgentInterface 
+            content={content}
+            purpose={purpose}
+            writingCriteria={writingCriteria}
+            isMonitoring={isMonitoring}
+            onToggleMonitoring={() => setIsMonitoring(!isMonitoring)}
+            onClearFeedback={() => setFeedback([])}
           />
         ) : (
           <InquiryComplexManager 
